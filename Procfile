@@ -1,1 +1,1 @@
-web: gunicorn SIA:app
+gunicorn SIA:app
