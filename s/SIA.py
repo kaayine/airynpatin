@@ -5083,6 +5083,13 @@ def laporan():
                     <div class="card-header">
                         <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
                         <div>
+                            <button class="btn-primary btn-warning" onclick="generateJurnalPenutup()">
+                                <i class="ri-refresh-line"></i> Generate Jurnal Penutup
+                            </button>
+                            <button class="btn-primary btn-danger" onclick="prosesPenutupanPeriode()">
+                                <i class="ri-shut-down-line"></i> Proses Penutupan Periode
+                            </button>
+                        </div>
                     </div>
                     <div class="jurnal-container">
         """
@@ -7961,3 +7968,4 @@ if __name__ == "__main__":
     setup_default_accounts()
     setup_default_inventory_items()  
     app.run(debug=True, port=5000)
+
