@@ -3610,11 +3610,40 @@ def laporan():
             
             
             # Jurnal Penutup (Logic sederhana)
-            jurnal_penutup_data = [] 
+            jurnal_penutup_data = get_jurnal_penutup_data() 
             # (Logic generate jurnal penutup bisa ditambahkan jika fitur ini krusial ditampilkan realtime)
 
             # Neraca Saldo Penutupan
-            neraca_saldo_penutupan = [] # (Logic neraca penutupan)
+            neraca_saldo_penutupan = []
+            
+            for item in neraca_saldo_setelah_penyesuaian:
+                kode = item['kode_akun']
+                # Akun Real: Aset (1), Liabilitas (2), Modal (3)
+                # Filter: Ambil yg awalan 1, 2, atau 3. Tapi buang Prive (3-1200) dan Ikhtisar LR (3-1100) karena sudah ditutup.
+                if kode.startswith('1-') or kode.startswith('2-') or (kode.startswith('3-') and kode not in ['3-1100', '3-1200']):
+                    
+                    # Ambil saldo normal
+                    saldo_val = item['debit'] if item['tipe_akun'] == 'debit' else item['kredit']
+                    
+                    # KHUSUS MODAL (3-1000): Gunakan nilai Modal Akhir dari Laporan Perubahan Modal
+                    if kode == '3-1000':
+                        saldo_val = perubahan_modal_data['modal_akhir']
+                    
+                    # Masukkan ke list
+                    if item['tipe_akun'] == 'debit':
+                        neraca_saldo_penutupan.append({
+                            'kode_akun': kode,
+                            'nama_akun': item['nama_akun'],
+                            'debit': saldo_val,
+                            'kredit': 0
+                        })
+                    else:
+                        neraca_saldo_penutupan.append({
+                            'kode_akun': kode,
+                            'nama_akun': item['nama_akun'],
+                            'debit': 0,
+                            'kredit': saldo_val
+                        })
 
         except Exception as e:
             print(f"Error fetching data: {e}")
@@ -5083,15 +5112,10 @@ def laporan():
                     <div class="card-header">
                         <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
                         <div>
-                            <button class="btn-primary btn-warning" onclick="generateJurnalPenutup()">
-                                <i class="ri-refresh-line"></i> Generate Jurnal Penutup
-                            </button>
-                            <button class="btn-primary btn-danger" onclick="prosesPenutupanPeriode()">
-                                <i class="ri-shut-down-line"></i> Proses Penutupan Periode
-                            </button>
-                        </div>
+                        <div class="card-header">
+                        <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
+                        <p style="color: #64748b; margin: 0;">Digenerate otomatis berdasarkan Laba Rugi</p>
                     </div>
-                    <div class="jurnal-container">
         """
         
         # Tampilkan data jurnal penutup
