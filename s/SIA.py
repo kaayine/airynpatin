@@ -1135,123 +1135,39 @@ def update_inventory(item_code, transaction_type, quantity, price, transaction_d
 
 # === Helper: Record inventory transaction ===
 def record_inventory_transaction(item_code, transaction_type, quantity, price, reference_id, description, transaction_date):
-    """Record transaksi inventory untuk history dengan LOGIKA STOK FISIK"""
+    """Record transaksi inventory untuk history"""
     try:
-        print(f"🔧 Recording inventory transaction: {item_code}, type: {transaction_type}, qty: {quantity}")
+        item_res = supabase.table("inventory_items").select("id").eq("item_code", item_code).execute()
         
-        # Validasi input - HANYA quantity yang penting untuk stok fisik
-        if not item_code or quantity <= 0:
-            print(f"❌ Invalid input: item_code={item_code}, quantity={quantity}")
-            return False
-        
-        # Cari item di tabel inventory
-        try:
-            item_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
+        if not item_res.data:
+            print(f"❌ Item {item_code} tidak ditemukan di tabel inventory_items")
+            return
             
-            if not item_res.data:
-                print(f"❌ Item {item_code} tidak ditemukan di tabel inventory, creating...")
-                
-                # Buat item baru jika tidak ditemukan
-                new_item = {
-                    'item_code': item_code,
-                    'item_name': 'Ikan Patin 8cm' if '8CM' in item_code.upper() else 'Ikan Patin 10cm',
-                    'item_size': '8cm' if '8CM' in item_code.upper() else '10cm',
-                    'current_stock': 0,
-                    'purchase_price': 500 if '8CM' in item_code.upper() else 800,
-                    'selling_price': 1000 if '8CM' in item_code.upper() else 1500,
-                    'total_sold': 0,
-                    'created_at': datetime.now().isoformat()
-                }
-                
-                create_result = supabase.table("inventory").insert(new_item).execute()
-                if create_result.data:
-                    print(f"✅ Created new inventory item: {item_code}")
-                    item_data = new_item
-                else:
-                    print(f"❌ Failed to create inventory item: {item_code}")
-                    return False
-            else:
-                item_data = item_res.data[0]
-                
-        except Exception as e:
-            print(f"❌ Error finding inventory item: {e}")
-            return False
+        item_uuid = item_res.data[0]['id']
+        total_value = quantity * price
         
-        # HITUNG STOK BARU BERDASARKAN JENIS TRANSAKSI
-        current_stock = item_data['current_stock']
-        total_sold = item_data['total_sold']
-        
-        if transaction_type == 'PURCHASE':
-            new_stock = current_stock + quantity  # Stok bertambah
-            print(f"🔧 Stock IN: {current_stock} + {quantity} = {new_stock}")
-        elif transaction_type == 'SALE':
-            if current_stock < quantity:
-                print(f"❌ Insufficient stock: {current_stock} < {quantity}")
-                return False
-            new_stock = current_stock - quantity  # Stok berkurang
-            total_sold += quantity
-            print(f"🔧 Stock OUT: {current_stock} - {quantity} = {new_stock}")
-        elif transaction_type == 'ADJUSTMENT':
-            new_stock = quantity  # Set manual
-            print(f"🔧 Stock ADJUST: set to {quantity}")
-        else:
-            print(f"⚠ Unknown transaction type: {transaction_type}")
-            return False
-        
-        # Simpan transaksi ke tabel inventory_transactions
-        # HANYA CATAT quantity, harga untuk laporan keuangan saja
         transaction_data = {
-            "item_code": item_code,
+            "item_id": item_uuid,         
             "transaction_type": transaction_type,
             "quantity": quantity,
-            "price": price,  # Hanya untuk catatan keuangan
-            "total_amount": quantity * price,
-            "reference_id": reference_id,
-            "description": description,
-            "transaction_date": transaction_date,
-            "created_at": datetime.now().isoformat()
+            "unit_cost": price,               
+            "total_value": total_value,       
+            "reference_number": reference_id, 
+            "notes": description,  
+            "transaction_date": transaction_date
         }
-        
-        print(f"🔧 Saving inventory transaction: {transaction_data}")
         
         # Simpan transaksi
-        try:
-            result = supabase.table("inventory_transactions").insert(transaction_data).execute()
-            
-            if not result.data:
-                print(f"❌ Failed to save inventory transaction")
-                return False
-        except Exception as e:
-            print(f"❌ Error saving inventory transaction: {e}")
-            return False
+        supabase.table("inventory_transactions").insert(transaction_data).execute()
         
-        # UPDATE STOK DI TABEL INVENTORY
-        update_data = {
-            "current_stock": new_stock,
-            "total_sold": total_sold,
-            "updated_at": datetime.now().isoformat()
-        }
+        # Update stok
+        update_inventory_stock(item_code, transaction_type, quantity)
         
-        print(f"🔧 Updating inventory stock: {item_code} -> {new_stock}")
-        
-        try:
-            result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
-            
-            if result.data:
-                print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity} units")
-                print(f"✅ Stock updated: {current_stock} -> {new_stock}")
-                return True
-            else:
-                print(f"❌ Failed to update inventory: {item_code}")
-                return False
-        except Exception as e:
-            print(f"❌ Error updating inventory: {e}")
-            return False
+        print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
+        return True
         
     except Exception as e:
-        print(f"❌ Error recording inventory transaction: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"Error recording inventory transaction: {e}")
         return False
 
 # === Helper: Get inventory summary ===
