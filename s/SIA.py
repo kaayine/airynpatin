@@ -3629,10 +3629,6 @@ def laporan():
             # Neraca Saldo Penutupan
             neraca_saldo_penutupan = get_neraca_saldo_setelah_penutupan()
 
-            print(f"🔍 LAPORAN DEBUG:")
-            print(f"  - Jurnal Penutup entries: {len(jurnal_penutup_data)}")
-            print(f"  - Neraca Penutupan entries: {len(neraca_saldo_penutupan)}")
-
         except Exception as e:
             print(f"Error fetching data: {e}")
             import traceback
@@ -5095,184 +5091,140 @@ def laporan():
             </div>
 
              <!-- TAB BARU: JURNAL PENUTUP -->
-<div id="jurnal-penutup" class="tab-content">
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
-            <p style="color: #64748b; margin: 0;">Otomatis terhitung dari data transaksi dan penyesuaian</p>
-        </div>
-        <div class="jurnal-container">
-            {% if jurnal_penutup_data %}
-                <table class="jurnal-table">
-                    <thead>
-                        <tr>
-                            <th width="100">Kode Akun</th>
-                            <th>Nama Akun</th>
-                            <th width="200">Debit</th>
-                            <th width="200">Kredit</th>
-                            <th>Keterangan</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for entry in jurnal_penutup_data %}
-                        <tr>
-                            <td><strong>{{ entry.kode_akun }}</strong></td>
-                            <td>{{ entry.nama_akun }}</td>
-                            <td class="debit-amount">
-                                {% if entry.debit > 0 %}
-                                    Rp {{ "{:,.0f}".format(entry.debit) }}
-                                {% endif %}
-                            </td>
-                            <td class="kredit-amount">
-                                {% if entry.kredit > 0 %}
-                                    Rp {{ "{:,.0f}".format(entry.kredit) }}
-                                {% endif %}
-                            </td>
-                            <td>{{ entry.keterangan }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-                
-                <!-- Total Calculation -->
-                <div style="background: #f8fafc; padding: 1rem; border-radius: 8px; margin-top: 1rem;">
-                    <div style="display: flex; justify-content: space-between; font-weight: 700;">
-                        <span>Total Debit:</span>
-                        <span>Rp {{ "{:,.0f}".format(jurnal_penutup_data|sum(attribute='debit')) }}</span>
+            <div id="jurnal-penutup" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
+                        <div>
+        """
+        
+        # Tampilkan data jurnal penutup
+        if jurnal_penutup_data:
+            laporan_content += """
+                        <table class="jurnal-table">
+                            <thead>
+                                <tr>
+                                    <th width="100">Kode Akun</th>
+                                    <th>Nama Akun</th>
+                                    <th width="200">Debit</th>
+                                    <th width="200">Kredit</th>
+                                    <th>Keterangan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            """
+            
+            for entry in jurnal_penutup_data:
+                laporan_content += f"""
+                            <tr>
+                                <td><strong>{entry['kode_akun']}</strong></td>
+                                <td>{entry['nama_akun']}</td>
+                                <td class="debit-amount">{f"Rp {entry['debit']:,.0f}" if entry['debit'] > 0 else ""}</td>
+                                <td class="kredit-amount">{f"Rp {entry['kredit']:,.0f}" if entry['kredit'] > 0 else ""}</td>
+                                <td>{entry['keterangan']}</td>
+                            </tr>
+                """
+            
+            laporan_content += """
+                        </tbody>
+                    </table>
+            """
+        else:
+            laporan_content += """
+                    <div class="empty-state">
+                        <i class="ri-file-list-3-line"></i>
+                        <h3>Belum Ada Jurnal Penutup</h3>
+                        <p>Jurnal penutup akan di-generate otomatis berdasarkan data laba rugi</p>
                     </div>
-                    <div style="display: flex; justify-content: space-between; font-weight: 700; margin-top: 0.5rem;">
-                        <span>Total Kredit:</span>
-                        <span>Rp {{ "{:,.0f}".format(jurnal_penutup_data|sum(attribute='kredit')) }}</span>
-                    </div>
-                    {% set total_debit = jurnal_penutup_data|sum(attribute='debit') %}
-                    {% set total_kredit = jurnal_penutup_data|sum(attribute='kredit') %}
-                    <div style="margin-top: 1rem; padding: 0.5rem; border-radius: 6px; 
-                                {% if (total_debit - total_kredit)|abs < 0.01 %}
-                                    background: #d1fae5; color: #065f46;
-                                {% else %}
-                                    background: #fef2f2; color: #dc2626;
-                                {% endif %}">
-                        <strong>
-                            {% if (total_debit - total_kredit)|abs < 0.01 %}
-                                ✅ Jurnal Penutup Balance
-                            {% else %}
-                                ❌ Jurnal Penutup Tidak Balance (Selisih: Rp {{ "{:,.0f}".format((total_debit - total_kredit)|abs) }})
-                            {% endif %}
-                        </strong>
+            """
+        
+        laporan_content += """
                     </div>
                 </div>
-            {% else %}
-                <div class="empty-state">
-                    <i class="ri-file-list-3-line"></i>
-                    <h3>Belum Ada Data Jurnal Penutup</h3>
-                    <p>Data akan muncul setelah ada transaksi dan jurnal penyesuaian</p>
-                    <p style="font-size: 0.9rem; color: #64748b; margin-top: 1rem;">
-                        Pastikan sudah ada:<br>
-                        1. Transaksi penjualan/pembelian<br>
-                        2. Jurnal penyesuaian (jika ada aset tetap)<br>
-                        3. Data laba rugi terhitung dengan benar
-                    </p>
-                </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
+            </div>
             
             <!-- TAB BARU: NERACA SALDO SETELAH PENUTUPAN -->
-<div id="neraca-saldo-penutupan" class="tab-content">
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Neraca Saldo Setelah Penutupan - Toko Ikan Patin</h2>
-            <p style="color: #64748b; margin: 0;">Saldo akhir akun REAL setelah penutupan akun nominal</p>
-        </div>
+            <div id="neraca-saldo-penutupan" class="tab-content">
+                <div class="card">
+                    <div class="card-header">
+                        <h2 class="card-title">Neraca Saldo Setelah Penutupan - Toko Ikan Patin</h2>
+                        <p style="color: #64748b; margin: 0;">Saldo akhir akun real setelah penutupan</p>
+                    </div>
+                    
+                    <div class="jurnal-container">
+        """
         
-        <div class="jurnal-container">
-            {% if neraca_saldo_penutupan %}
-                <table class="neraca-table">
-                    <thead>
-                        <tr>
-                            <th width="100">Kode Akun</th>
-                            <th>Nama Akun</th>
-                            <th width="200">Debit</th>
-                            <th width="200">Kredit</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for item in neraca_saldo_penutupan %}
-                        <tr>
-                            <td><strong>{{ item.kode_akun }}</strong></td>
-                            <td>{{ item.nama_akun }}</td>
-                            <td class="debit-amount">
-                                {% if item.debit > 0 %}
-                                    Rp {{ "{:,.0f}".format(item.debit) }}
-                                {% endif %}
-                            </td>
-                            <td class="kredit-amount">
-                                {% if item.kredit > 0 %}
-                                    Rp {{ "{:,.0f}".format(item.kredit) }}
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                    {% set total_debit = neraca_saldo_penutupan|sum(attribute='debit') %}
-                    {% set total_kredit = neraca_saldo_penutupan|sum(attribute='kredit') %}
-                    <tfoot>
-                        <tr class="total-row">
-                            <td colspan="2"><strong>TOTAL</strong></td>
-                            <td class="debit-amount"><strong>Rp {{ "{:,.0f}".format(total_debit) }}</strong></td>
-                            <td class="kredit-amount"><strong>Rp {{ "{:,.0f}".format(total_kredit) }}</strong></td>
-                        </tr>
-                    </tfoot>
-                </table>
-                
-                <!-- Status Balance -->
-                <div style="margin-top: 1rem; padding: 1rem; border-radius: 8px; 
-                            {% if (total_debit - total_kredit)|abs < 0.01 %}
-                                background: #f0fdf4; border-left: 4px solid #10b981;
-                            {% else %}
-                                background: #fef2f2; border-left: 4px solid #ef4444;
-                            {% endif %}">
-                    <h4 style="margin: 0; 
-                               {% if (total_debit - total_kredit)|abs < 0.01 %}
-                                   color: #065f46;
-                               {% else %}
-                                   color: #dc2626;
-                               {% endif %}">
-                        {% if (total_debit - total_kredit)|abs < 0.01 %}
-                            ✅ Neraca Saldo Setelah Penutupan BALANCE
-                        {% else %}
-                            ❌ Neraca Saldo Setelah Penutupan TIDAK BALANCE
-                        {% endif %}
-                    </h4>
-                    <p style="margin: 0.5rem 0 0 0;
-                              {% if (total_debit - total_kredit)|abs < 0.01 %}
-                                  color: #065f46;
-                              {% else %}
-                                  color: #dc2626;
-                              {% endif %}">
-                        Total Debit: Rp {{ "{:,.0f}".format(total_debit) }} 
-                        {% if (total_debit - total_kredit)|abs < 0.01 %}
-                            =
-                        {% else %}
-                            ≠
-                        {% endif %}
-                        Total Kredit: Rp {{ "{:,.0f}".format(total_kredit) }}
-                        {% if (total_debit - total_kredit)|abs >= 0.01 %}
-                            <br>Selisih: Rp {{ "{:,.0f}".format((total_debit - total_kredit)|abs) }}
-                        {% endif %}
-                    </p>
+        # Tampilkan data neraca saldo setelah penutupan
+        if neraca_saldo_penutupan:
+            total_debit = sum(item['debit'] for item in neraca_saldo_penutupan)
+            total_kredit = sum(item['kredit'] for item in neraca_saldo_penutupan)
+            
+            laporan_content += """
+                    <table class="neraca-table">
+                        <thead>
+                            <tr>
+                                <th width="100">Kode Akun</th>
+                                <th>Nama Akun</th>
+                                <th width="200">Debit</th>
+                                <th width="200">Kredit</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+            """
+            
+            for item in neraca_saldo_penutupan:
+                laporan_content += f"""
+                            <tr>
+                                <td><strong>{item['kode_akun']}</strong></td>
+                                <td>{item['nama_akun']}</td>
+                                <td class="debit-amount">{f"Rp {item['debit']:,.0f}" if item['debit'] > 0 else ""}</td>
+                                <td class="kredit-amount">{f"Rp {item['kredit']:,.0f}" if item['kredit'] > 0 else ""}</td>
+                            </tr>
+                """
+            
+            laporan_content += f"""
+                            <tr class="total-row">
+                                <td colspan="2"><strong>TOTAL</strong></td>
+                                <td class="debit-amount"><strong>Rp {total_debit:,.0f}</strong></td>
+                                <td class="kredit-amount"><strong>Rp {total_kredit:,.0f}</strong></td>
+                            </tr>
+            """
+            
+            laporan_content += """
+                        </tbody>
+                    </table>
+            """
+            
+            # Tampilkan status balance
+            if abs(total_debit - total_kredit) < 0.01:
+                laporan_content += f"""
+                    <div style="background: #f0fdf4; padding: 1rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid #10b981;">
+                        <h4 style="color: #065f46; margin: 0;">✅ Neraca Saldo Setelah Penutupan Balance</h4>
+                        <p style="color: #065f46; margin: 0.5rem 0 0 0;">Total Debit (Rp {total_debit:,.0f}) = Total Kredit (Rp {total_kredit:,.0f})</p>
+                    </div>
+                """
+            else:
+                laporan_content += f"""
+                    <div style="background: #fef2f2; padding: 1rem; border-radius: 8px; margin-top: 1rem; border-left: 4px solid #ef4444;">
+                        <h4 style="color: #dc2626; margin: 0;">❌ Neraca Saldo Setelah Penutupan Tidak Balance</h4>
+                        <p style="color: #dc2626; margin: 0.5rem 0 0 0;">Total Debit (Rp {total_debit:,.0f}) ≠ Total Kredit (Rp {total_kredit:,.0f})</p>
+                        <p style="color: #dc2626; margin: 0.5rem 0 0 0;">Selisih: Rp {abs(total_debit - total_kredit):,.0f}</p>
+                    </div>
+                """
+        else:
+            laporan_content += """
+                    <div class="empty-state">
+                        <i class="ri-file-list-3-line"></i>
+                        <h3>Belum Ada Data Neraca Saldo Setelah Penutupan</h3>
+                        <p>Data akan muncul setelah proses penutupan akun nominal</p>
+                    </div>
+            """
+        
+        laporan_content += """
+                    </div>
                 </div>
-            {% else %}
-                <div class="empty-state">
-                    <i class="ri-file-list-3-line"></i>
-                    <h3>Belum Ada Data Neraca Saldo Setelah Penutupan</h3>
-                    <p>Data akan muncul setelah sistem menghitung jurnal penutup</p>
-                </div>
-            {% endif %}
+            </div>
         </div>
-    </div>
-</div>
         
         <!-- MODAL TAMBAH AKUN -->
         <div id="tambah-akun" class="modal">
