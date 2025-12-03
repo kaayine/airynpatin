@@ -1132,7 +1132,7 @@ def update_inventory(item_code, transaction_type, quantity, price, transaction_d
     except Exception as e:
         print(f"Error updating inventory: {e}")
         return False
-    
+
 # === Helper: Record inventory transaction ===
 def record_inventory_transaction(item_code, transaction_type, quantity, price, reference_id, description, transaction_date):
     """Record transaksi inventory untuk history dengan validasi"""
@@ -1146,7 +1146,7 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
         
         # Cari item di tabel inventory
         try:
-            item_res = supabase.table("inventory_items").select("*").eq("item_code", item_code).execute()
+            item_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
             
             if not item_res.data:
                 print(f"❌ Item {item_code} tidak ditemukan di tabel inventory, creating...")
@@ -1163,7 +1163,7 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
                     'created_at': datetime.now().isoformat()
                 }
                 
-                create_result = supabase.table("inventory_items").insert(new_item).execute()
+                create_result = supabase.table("inventory").insert(new_item).execute()
                 if create_result.data:
                     print(f"✅ Created new inventory item: {item_code}")
                     item_data = new_item
@@ -1231,7 +1231,7 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
         print(f"🔧 Updating inventory stock: {item_code} -> {new_stock}")
         
         try:
-            result = supabase.table("inventory_items").update(update_data).eq("item_code", item_code).execute()
+            result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
             
             if result.data:
                 print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
@@ -1253,7 +1253,7 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
 def get_inventory_summary():
     """Ambil summary inventory untuk tampilan sederhana"""
     try:
-        inventory_res = supabase.table("inventory_items").select("*").order("item_code").execute()
+        inventory_res = supabase.table("inventory").select("*").order("item_code").execute()
         return inventory_res.data if inventory_res.data else []
     except Exception as e:
         print(f"Error getting inventory summary: {e}")
@@ -1739,21 +1739,38 @@ def update_inventory_stock(item_code, transaction_type, quantity):
     """Update stok inventory berdasarkan transaksi"""
     try:
         # Ambil data inventory saat ini
-        inventory_res = supabase.table("inventory_items").select("*").eq("item_code", item_code).execute()
+        inventory_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
         
         if not inventory_res.data:
-            print(f"Item {item_code} tidak ditemukan")
-            return False
-        
-        current_data = inventory_res.data[0]
-        new_stock = current_data['current_stock']
-        total_sold = current_data['total_sold']
+            print(f"❌ Item {item_code} tidak ditemukan di inventory")
+            # Coba buat item baru
+            new_item = {
+                "item_code": item_code,
+                "item_name": "Ikan Patin",
+                "item_size": "8cm" if "8CM" in item_code else "10cm",
+                "current_stock": 0,
+                "purchase_price": 500 if "8CM" in item_code else 800,
+                "selling_price": 1000 if "8CM" in item_code else 1500,
+                "total_sold": 0
+            }
+            create_res = supabase.table("inventory").insert(new_item).execute()
+            if create_res.data:
+                print(f"✅ Created new inventory item: {item_code}")
+                current_stock = 0
+                total_sold = 0
+            else:
+                print(f"❌ Failed to create inventory item: {item_code}")
+                return False
+        else:
+            current_data = inventory_res.data[0]
+            current_stock = current_data['current_stock']
+            total_sold = current_data['total_sold']
         
         # Update berdasarkan jenis transaksi
         if transaction_type == 'PURCHASE':
-            new_stock += quantity
+            new_stock = current_stock + quantity
         elif transaction_type == 'SALE':
-            new_stock -= quantity
+            new_stock = current_stock - quantity
             total_sold += quantity
         elif transaction_type == 'ADJUSTMENT':
             new_stock = quantity  # Set manual
@@ -1765,17 +1782,17 @@ def update_inventory_stock(item_code, transaction_type, quantity):
             "updated_at": datetime.now().isoformat()
         }
         
-        result = supabase.table("inventory_items").update(update_data).eq("item_code", item_code).execute()
+        result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
         
         if result.data:
-            print(f"✅ Inventory stock updated: {item_code} {transaction_type} {quantity} units")
+            print(f"✅ Inventory stock updated: {item_code} {transaction_type} {quantity} units (from {current_stock} to {new_stock})")
             return True
         else:
-            print(f"❌ Failed to update inventory stock: {item_code}")
+            print(f"❌ Failed to update inventory stock: {item_code} - {result.error}")
             return False
             
     except Exception as e:
-        print(f"Error updating inventory stock: {e}")
+        print(f"❌ Error updating inventory stock: {e}")
         return False
 
 # === Helper: Record inventory transaction ===
@@ -2068,7 +2085,7 @@ def setup_default_inventory_items():
         
         # Cek apakah tabel inventory ada
         try:
-            existing_res = supabase.table("inventory_items").select("item_code").execute()
+            existing_res = supabase.table("inventory").select("item_code").execute()
             existing_items = [item['item_code'] for item in existing_res.data] if existing_res.data else []
         except Exception as e:
             print(f"⚠ Tabel inventory mungkin belum ada: {e}")
@@ -2079,7 +2096,7 @@ def setup_default_inventory_items():
             if item['item_code'] not in existing_items:
                 print(f"🔧 Adding inventory item: {item['item_code']}")
                 try:
-                    result = supabase.table("inventory_items").insert(item).execute()
+                    result = supabase.table("inventory").insert(item).execute()
                     if result.data:
                         print(f"✅ Inventory item {item['item_code']} berhasil ditambahkan")
                     else:
@@ -7315,7 +7332,7 @@ def adjust_stok():
         keterangan = request.form.get('keterangan', '')
         
         # Ambil stok saat ini
-        inventory_res = supabase.table("inventory_items").select("current_stock").eq("item_code", item_code).execute()
+        inventory_res = supabase.table("inventory").select("current_stock").eq("item_code", item_code).execute()
         if not inventory_res.data:
             return "<script>alert('Item tidak ditemukan!'); window.history.back();</script>"
         
@@ -7351,7 +7368,7 @@ def reset_inventory():
     
     try:
         # Hapus semua data inventory yang ada
-        supabase.table("inventory_items").delete().neq("item_code", "none").execute()
+        supabase.table("inventory").delete().neq("item_code", "none").execute()
         print("✅ Inventory data cleared")
         
         # Setup ulang inventory
@@ -7380,7 +7397,7 @@ def check_inventory():
     
     try:
         # Cek data inventory
-        inventory_res = supabase.table("inventory_items").select("*").execute()
+        inventory_res = supabase.table("inventory").select("*").execute()
         
         html = f"""
         <h2>📊 Inventory Status</h2>
