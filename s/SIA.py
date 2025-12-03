@@ -1210,10 +1210,10 @@ def get_neraca_saldo_data():
 def get_neraca_saldo_setelah_penyesuaian():
     """Ambil data untuk neraca saldo setelah penyesuaian"""
     try:
-        # Ambil neraca saldo sebelum penyesuaian
+        # 1. Ambil neraca saldo sebelum penyesuaian (dari jurnal umum)
         neraca_saldo = get_neraca_saldo_data()
         
-        # Ambil data jurnal penyesuaian
+        # 2. Ambil data jurnal penyesuaian langsung
         jurnal_penyesuaian_res = supabase.table("jurnal_penyesuaian")\
             .select("*")\
             .order("tanggal")\
@@ -1221,10 +1221,19 @@ def get_neraca_saldo_setelah_penyesuaian():
             .execute()
         jurnal_penyesuaian = jurnal_penyesuaian_res.data if jurnal_penyesuaian_res.data else []
         
-        # Buat dictionary untuk memudahkan pencarian
-        neraca_dict = {item['kode_akun']: item for item in neraca_saldo}
+        print(f"🔍 DEBUG: NSSP - Neraca saldo entries: {len(neraca_saldo)}")
+        print(f"🔍 DEBUG: NSSP - Jurnal penyesuaian entries: {len(jurnal_penyesuaian)}")
         
-        # Terapkan penyesuaian
+        # 3. Konversi neraca saldo ke dictionary untuk memudahkan update
+        neraca_dict = {}
+        for item in neraca_saldo:
+            neraca_dict[item['kode_akun']] = {
+                'nama_akun': item['nama_akun'],
+                'debit': item['debit'],
+                'kredit': item['kredit']
+            }
+        
+        # 4. Terapkan penyesuaian
         for jurnal in jurnal_penyesuaian:
             kode_akun = jurnal['kode_akun']
             
@@ -1234,40 +1243,98 @@ def get_neraca_saldo_setelah_penyesuaian():
                 if accounts_res.data:
                     akun = accounts_res.data[0]
                     neraca_dict[kode_akun] = {
-                        'kode_akun': kode_akun,
                         'nama_akun': akun['nama_akun'],
                         'debit': 0,
                         'kredit': 0
                     }
+                    print(f"🔍 DEBUG: NSSP - Added new account from adjustment: {kode_akun}")
             
             # Update saldo berdasarkan jurnal penyesuaian
             if kode_akun in neraca_dict:
-                if jurnal['debit'] > 0:
-                    neraca_dict[kode_akun]['debit'] += jurnal['debit']
-                if jurnal['kredit'] > 0:
-                    neraca_dict[kode_akun]['kredit'] += jurnal['kredit']
+                neraca_dict[kode_akun]['debit'] += jurnal['debit']
+                neraca_dict[kode_akun]['kredit'] += jurnal['kredit']
+                print(f"🔍 DEBUG: NSSP - Applied adjustment: {kode_akun} +Debit:{jurnal['debit']} +Kredit:{jurnal['kredit']}")
         
-        # Konversi kembali ke list
-        neraca_setelah_penyesuaian = list(neraca_dict.values())
+        # 5. Konversi kembali ke list dan format
+        neraca_setelah_penyesuaian = []
+        for kode_akun, data in neraca_dict.items():
+            # Ambil info tipe akun untuk menentukan saldo normal
+            accounts_res = supabase.table("accounts").select("tipe_akun").eq("kode_akun", kode_akun).execute()
+            tipe_akun = accounts_res.data[0]['tipe_akun'] if accounts_res.data else 'debit'
+            
+            # Format sesuai tipe akun
+            if tipe_akun == 'debit':
+                # Untuk akun debit: saldo = debit - kredit
+                saldo = data['debit'] - data['kredit']
+                if saldo >= 0:
+                    formatted_item = {
+                        'kode_akun': kode_akun,
+                        'nama_akun': data['nama_akun'],
+                        'debit': saldo,
+                        'kredit': 0,
+                        'saldo_akhir': saldo,
+                        'tipe_akun': tipe_akun
+                    }
+                else:
+                    formatted_item = {
+                        'kode_akun': kode_akun,
+                        'nama_akun': data['nama_akun'],
+                        'debit': 0,
+                        'kredit': abs(saldo),
+                        'saldo_akhir': saldo,
+                        'tipe_akun': tipe_akun
+                    }
+            else:  # kredit
+                # Untuk akun kredit: saldo = kredit - debit
+                saldo = data['kredit'] - data['debit']
+                if saldo >= 0:
+                    formatted_item = {
+                        'kode_akun': kode_akun,
+                        'nama_akun': data['nama_akun'],
+                        'debit': 0,
+                        'kredit': saldo,
+                        'saldo_akhir': saldo,
+                        'tipe_akun': tipe_akun
+                    }
+                else:
+                    formatted_item = {
+                        'kode_akun': kode_akun,
+                        'nama_akun': data['nama_akun'],
+                        'debit': abs(saldo),
+                        'kredit': 0,
+                        'saldo_akhir': saldo,
+                        'tipe_akun': tipe_akun
+                    }
+            
+            neraca_setelah_penyesuaian.append(formatted_item)
         
+        print(f"🔍 DEBUG: NSSP - Final entries: {len(neraca_setelah_penyesuaian)}")
         return neraca_setelah_penyesuaian
         
     except Exception as e:
-        print(f"Error getting neraca saldo setelah penyesuaian: {e}")
+        print(f"❌ Error getting neraca saldo setelah penyesuaian: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
-# === Helper: Ambil data jurnal penyesuaian ===
+# === Helper: Get jurnal penyesuaian ===
 def get_jurnal_penyesuaian():
     """Ambil data jurnal penyesuaian"""
     try:
-        jurnal_res = supabase.table("jurnal_penyesuaian")\
+        # Ambil data jurnal penyesuaian langsung dari tabel
+        jurnal_penyesuaian_res = supabase.table("jurnal_penyesuaian")\
             .select("*")\
             .order("tanggal")\
             .order("id")\
             .execute()
-        return jurnal_res.data if jurnal_res.data else []
+        
+        jurnal_penyesuaian = jurnal_penyesuaian_res.data if jurnal_penyesuaian_res.data else []
+        print(f"🔍 DEBUG: get_jurnal_penyesuaian() found {len(jurnal_penyesuaian)} entries")
+        
+        return jurnal_penyesuaian
+        
     except Exception as e:
-        print(f"Error getting jurnal penyesuaian: {e}")
+        print(f"❌ Error getting jurnal penyesuaian: {e}")
         return []
 
 # === Helper: Ambil data neraca lajur ===
@@ -1389,106 +1456,102 @@ def get_neraca_lajur():
 def get_laba_rugi_data():
     """Ambil data untuk laporan laba rugi dengan perhitungan HPP yang benar"""
     try:
-        # Ambil data dari neraca saldo setelah penyesuaian untuk komponen HPP
+        # GUNAKAN NERACA SETELAH PENYESUAIAN
         neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
         
-        # Ambil saldo awal persediaan dari daftar akun (bukan dari NSSP)
-        accounts_res = supabase.table("accounts").select("*").in_("kode_akun", ['1-1200', '1-1300']).execute()
-        saldo_awal_accounts = {acc['kode_akun']: acc['saldo_awal'] for acc in accounts_res.data} if accounts_res.data else {}
+        print(f"🔍 LABA RUGI: Data NSSP entries: {len(neraca_setelah_penyesuaian)}")
         
-        # Hitung Persediaan Awal dari saldo_awal di accounts
-        persediaan_awal_8cm = saldo_awal_accounts.get('1-1200', 0)
-        persediaan_awal_10cm = saldo_awal_accounts.get('1-1300', 0)
-        total_persediaan_awal = persediaan_awal_8cm + persediaan_awal_10cm
-        
-        # Cari data dari NSSP untuk komponen lainnya
-        pembelian_8cm = 0
-        pembelian_10cm = 0
-        beban_angkut_pembelian = 0
-        persediaan_akhir_8cm = 0
-        persediaan_akhir_10cm = 0
-        
+        # Debug: tampilkan semua akun pendapatan dan beban
+        print("🔍 LABA RUGI: Akun Pendapatan dan Beban:")
         for item in neraca_setelah_penyesuaian:
-            if item['kode_akun'] == '1-1200':  # Persediaan Ikan Patin 8cm
-                persediaan_akhir_8cm = item['debit'] if item['debit'] > 0 else item['kredit']
-            elif item['kode_akun'] == '1-1300':  # Persediaan Ikan Patin 10cm
-                persediaan_akhir_10cm = item['debit'] if item['debit'] > 0 else item['kredit']
-            elif item['kode_akun'] == '5-1300':  # Beban Angkut Pembelian
-                beban_angkut_pembelian = item['debit'] if item['debit'] > 0 else item['kredit']
+            if item['kode_akun'].startswith('4-') or item['kode_akun'].startswith('5-') or item['kode_akun'].startswith('6-'):
+                print(f"  {item['kode_akun']} - {item['nama_akun']}: Debit={item['debit']}, Kredit={item['kredit']}")
         
-        # Hitung total pembelian dari akun pembelian (asumsi ada di jurnal)
-        jurnal_res = supabase.table("jurnal_umum").select("*").execute()
-        if jurnal_res.data:
-            for jurnal in jurnal_res.data:
-                if 'Pembelian' in jurnal['jenis_transaksi'] and jurnal['kode_akun'] in ['1-1200', '1-1300']:
-                    if jurnal['kode_akun'] == '1-1200':
-                        pembelian_8cm += jurnal['debit']
-                    elif jurnal['kode_akun'] == '1-1300':
-                        pembelian_10cm += jurnal['debit']
-        
-        total_pembelian = pembelian_8cm + pembelian_10cm
-        total_persediaan_akhir = persediaan_akhir_8cm + persediaan_akhir_10cm
-        
-        # Hitung HPP dengan rumus: (Persediaan Awal + Pembelian + Beban Angkut Pembelian) - Persediaan Akhir
-        hpp = (total_persediaan_awal + total_pembelian + beban_angkut_pembelian) - total_persediaan_akhir
-        
-        # Hitung pendapatan dan beban lainnya
+        # Hitung komponen dari NSSP
         total_pendapatan = 0
+        total_hpp = 0
         total_beban = 0
         
         for item in neraca_setelah_penyesuaian:
-            if item['kode_akun'].startswith('4-'):  # Pendapatan
-                total_pendapatan += item['kredit'] if item['kredit'] > 0 else 0
-            elif item['kode_akun'].startswith('5-') and item['kode_akun'] != '5-1300':  # Beban (kecuali beban angkut pembelian)
-                total_beban += item['debit'] if item['debit'] > 0 else 0
-            elif item['kode_akun'].startswith('6-'):  # Beban penyesuaian
-                total_beban += item['debit'] if item['debit'] > 0 else 0
+            kode = item['kode_akun']
+            
+            # PENDAPATAN (akun 4-xxx)
+            if kode.startswith('4-'):
+                total_pendapatan += item['kredit']  # Pendapatan normal kredit
+                print(f"🔍 LABA RUGI: Pendapatan {kode}: +{item['kredit']}")
+            
+            # HPP (5-1000)
+            elif kode == '5-1000':
+                total_hpp += item['debit']  # HPP normal debit
+                print(f"🔍 LABA RUGI: HPP {kode}: +{item['debit']}")
+            
+            # BEBAN OPERASIONAL (5-1100, 5-1200, 5-1300)
+            elif kode in ['5-1100', '5-1200', '5-1300']:
+                total_beban += item['debit']  # Beban normal debit
+                print(f"🔍 LABA RUGI: Beban {kode}: +{item['debit']}")
+            
+            # BEBAN PENYESUAIAN (6-xxx)
+            elif kode.startswith('6-'):
+                total_beban += item['debit']  # Beban penyesuaian normal debit
+                print(f"🔍 LABA RUGI: Beban Penyesuaian {kode}: +{item['debit']}")
         
-        laba_kotor = total_pendapatan - hpp
+        # Hitung laba kotor dan laba bersih
+        laba_kotor = total_pendapatan - total_hpp
         laba_bersih = laba_kotor - total_beban
+        
+        print(f"🔍 LABA RUGI: Total Pendapatan: {total_pendapatan}")
+        print(f"🔍 LABA RUGI: Total HPP: {total_hpp}")
+        print(f"🔍 LABA RUGI: Laba Kotor: {laba_kotor}")
+        print(f"🔍 LABA RUGI: Total Beban: {total_beban}")
+        print(f"🔍 LABA RUGI: Laba Bersih: {laba_bersih}")
+        
+        # Detail HPP (untuk display)
+        detail_hpp = {
+            'persediaan_awal': 0,
+            'persediaan_awal_8cm': 0,
+            'persediaan_awal_10cm': 0,
+            'pembelian': 0,
+            'pembelian_8cm': 0,
+            'pembelian_10cm': 0,
+            'beban_angkut_pembelian': 0,
+            'persediaan_akhir': 0,
+            'persediaan_akhir_8cm': 0,
+            'persediaan_akhir_10cm': 0
+        }
+        
+        # Ambil detail HPP dari NSSP jika ada
+        for item in neraca_setelah_penyesuaian:
+            if item['kode_akun'] == '1-1200':
+                detail_hpp['persediaan_akhir_8cm'] = item['debit'] if item['debit'] > 0 else item['kredit']
+            elif item['kode_akun'] == '1-1300':
+                detail_hpp['persediaan_akhir_10cm'] = item['debit'] if item['debit'] > 0 else item['kredit']
+            elif item['kode_akun'] == '5-1300':
+                detail_hpp['beban_angkut_pembelian'] = item['debit']  # Beban angkut pembelian
+        
+        detail_hpp['persediaan_akhir'] = detail_hpp['persediaan_akhir_8cm'] + detail_hpp['persediaan_akhir_10cm']
         
         return {
             'total_pendapatan': total_pendapatan,
-            'total_hpp': hpp,
+            'total_hpp': total_hpp,
             'laba_kotor': laba_kotor,
             'total_beban': total_beban,
             'laba_bersih': laba_bersih,
-            'detail_hpp': {
-                'persediaan_awal': total_persediaan_awal,
-                'persediaan_awal_8cm': persediaan_awal_8cm,
-                'persediaan_awal_10cm': persediaan_awal_10cm,
-                'pembelian': total_pembelian,
-                'pembelian_8cm': pembelian_8cm,
-                'pembelian_10cm': pembelian_10cm,
-                'beban_angkut_pembelian': beban_angkut_pembelian,
-                'persediaan_akhir': total_persediaan_akhir,
-                'persediaan_akhir_8cm': persediaan_akhir_8cm,
-                'persediaan_akhir_10cm': persediaan_akhir_10cm
-            }
+            'detail_hpp': detail_hpp
         }
         
     except Exception as e:
-        print(f"Error getting laba rugi data: {e}")
+        print(f"❌ Error getting laba rugi data: {e}")
+        import traceback
+        traceback.print_exc()
         return {
             'total_pendapatan': 0, 
             'total_hpp': 0, 
             'laba_kotor': 0, 
             'total_beban': 0, 
             'laba_bersih': 0,
-            'detail_hpp': {
-                'persediaan_awal': 0,
-                'persediaan_awal_8cm': 0,
-                'persediaan_awal_10cm': 0,
-                'pembelian': 0,
-                'pembelian_8cm': 0,
-                'pembelian_10cm': 0,
-                'beban_angkut_pembelian': 0,
-                'persediaan_akhir': 0,
-                'persediaan_akhir_8cm': 0,
-                'persediaan_akhir_10cm': 0
-            }
+            'detail_hpp': {}
         }
-
+    
 # === Helper: Ambil data neraca ===
 def get_neraca_data():
     """Ambil data untuk neraca"""
@@ -6392,36 +6455,39 @@ function hitungTotal() {
 
 @app.route("/get_saldo_aset")
 def get_saldo_aset():
-    """Ambil saldo aset untuk modal penyesuaian"""
+    """Ambil saldo aset untuk modal penyesuaian - AMBIL DARI SALDO AWAL"""
     if "user" not in session:
         return jsonify({"success": False})
     
     try:
-        print("🔍 get_saldo_aset() dipanggil")
+        print("🔍 get_saldo_aset() - Ambil dari saldo_awal accounts")
         
-        # Ambil neraca saldo saat ini
-        neraca_saldo_data = get_neraca_saldo_data()
-        print(f"📊 Data neraca saldo: {len(neraca_saldo_data)} entries")
+        # Ambil langsung dari tabel accounts (saldo_awal)
+        accounts_res = supabase.table("accounts").select("*").in_("kode_akun", ['1-2000', '1-2200', '1-2100']).execute()
         
-        # Debug: print semua akun aset
-        for item in neraca_saldo_data:
-            if '1-2' in item['kode_akun']:  # Semua akun aset tetap
-                print(f"🔍 Akun {item['kode_akun']}: Debit={item['debit']}, Kredit={item['kredit']}")
+        if not accounts_res.data:
+            print("❌ Tidak ada data akun aset")
+            return jsonify({
+                "success": False,
+                "saldo_kendaraan": 0,
+                "saldo_bangunan": 0,
+                "saldo_peralatan": 0
+            })
         
-        # Cari saldo aset tetap di neraca saldo
         saldo_kendaraan = 0
         saldo_bangunan = 0
         saldo_peralatan = 0
         
-        for item in neraca_saldo_data:
-            if item['kode_akun'] == '1-2000':  # Kendaraan
-                saldo_kendaraan = item['debit'] if item['debit'] > 0 else item['kredit']
-            elif item['kode_akun'] == '1-2200':  # Bangunan
-                saldo_bangunan = item['debit'] if item['debit'] > 0 else item['kredit']
-            elif item['kode_akun'] == '1-2100':  # Peralatan
-                saldo_peralatan = item['debit'] if item['debit'] > 0 else item['kredit']
-        
-        print(f"✅ Saldo ditemukan: Kendaraan={saldo_kendaraan}, Bangunan={saldo_bangunan}, Peralatan={saldo_peralatan}")
+        for acc in accounts_res.data:
+            if acc['kode_akun'] == '1-2000':
+                saldo_kendaraan = acc['saldo_awal']
+                print(f"🔍 Kendaraan (1-2000): Saldo Awal = Rp {saldo_kendaraan:,.0f}")
+            elif acc['kode_akun'] == '1-2200':
+                saldo_bangunan = acc['saldo_awal']
+                print(f"🔍 Bangunan (1-2200): Saldo Awal = Rp {saldo_bangunan:,.0f}")
+            elif acc['kode_akun'] == '1-2100':
+                saldo_peralatan = acc['saldo_awal']
+                print(f"🔍 Peralatan (1-2100): Saldo Awal = Rp {saldo_peralatan:,.0f}")
         
         return jsonify({
             "success": True,
@@ -6432,15 +6498,13 @@ def get_saldo_aset():
         
     except Exception as e:
         print(f"❌ Error in get_saldo_aset: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({
             "success": False,
             "saldo_kendaraan": 0,
             "saldo_bangunan": 0,
             "saldo_peralatan": 0
         })
-
+    
 @app.route("/tambah_jurnal_penyesuaian", methods=["POST"])
 def tambah_jurnal_penyesuaian():
     if "user" not in session:
@@ -6450,101 +6514,134 @@ def tambah_jurnal_penyesuaian():
         tanggal = request.form['tanggal']
         keterangan = request.form.get('keterangan', 'Jurnal Penyesuaian - Penyusutan Aset')
         
-        entries = []
+        print(f"🔧 PROSES JURNAL PENYESUAIAN - Tanggal: {tanggal}")
         
-        # Ambil data saldo awal aset tetap dari database
+        entries = []
+        total_debit = 0
+        total_kredit = 0
+        
+        # 1. Ambil saldo aset langsung dari accounts (saldo_awal)
         accounts_res = supabase.table("accounts").select("*").in_("kode_akun", ['1-2000', '1-2200', '1-2100']).execute()
         accounts_data = accounts_res.data if accounts_res.data else []
         
-        # Buat dictionary untuk memudahkan akses
+        print(f"🔧 Data akun aset ditemukan: {len(accounts_data)} akun")
+        
         saldo_aset = {}
         for acc in accounts_data:
             saldo_aset[acc['kode_akun']] = acc['saldo_awal']
+            print(f"🔧 Akun {acc['kode_akun']} - {acc['nama_akun']}: Saldo Awal = Rp {acc['saldo_awal']:,.0f}")
         
-        # Hitung penyusutan untuk masing-masing aset
-        # KENDARAAN (1-2000)
-        biaya_perolehan_kendaraan = saldo_aset.get('1-2000', 0)
-        if biaya_perolehan_kendaraan > 0:
-            nilai_residu_kendaraan = float(request.form.get('nilai_residu_kendaraan', 0))
-            nilai_ekonomis_kendaraan = float(request.form.get('nilai_ekonomis_kendaraan', 1))
+        # 2. Hitung penyusutan
+        # KENDARAAN
+        biaya_kendaraan = saldo_aset.get('1-2000', 0)
+        if biaya_kendaraan > 0:
+            residu_kendaraan = float(request.form.get('nilai_residu_kendaraan', 0))
+            ekonomis_kendaraan = float(request.form.get('nilai_ekonomis_kendaraan', 1))
             
-            if nilai_ekonomis_kendaraan > 0:
-                penyusutan_kendaraan = (biaya_perolehan_kendaraan - nilai_residu_kendaraan) / nilai_ekonomis_kendaraan
+            if ekonomis_kendaraan > 0:
+                penyusutan = (biaya_kendaraan - residu_kendaraan) / ekonomis_kendaraan
+                penyusutan = round(penyusutan, 2)
                 
-                if penyusutan_kendaraan > 0:
+                if penyusutan > 0:
                     entries.append({
                         'kode_akun': '6-1000', 
                         'deskripsi': 'Beban Penyusutan Kendaraan', 
-                        'debit': penyusutan_kendaraan, 
+                        'debit': penyusutan, 
                         'kredit': 0
                     })
                     entries.append({
                         'kode_akun': '1-2010', 
                         'deskripsi': 'Akumulasi Penyusutan Kendaraan', 
                         'debit': 0, 
-                        'kredit': penyusutan_kendaraan
+                        'kredit': penyusutan
                     })
+                    total_debit += penyusutan
+                    total_kredit += penyusutan
+                    print(f"🔧 Kendaraan - Penyusutan: Rp {penyusutan:,.0f}/tahun")
         
-        # BANGUNAN (1-2200)
-        biaya_perolehan_bangunan = saldo_aset.get('1-2200', 0)
-        if biaya_perolehan_bangunan > 0:
-            nilai_residu_bangunan = float(request.form.get('nilai_residu_bangunan', 0))
-            nilai_ekonomis_bangunan = float(request.form.get('nilai_ekonomis_bangunan', 1))
+        # BANGUNAN
+        biaya_bangunan = saldo_aset.get('1-2200', 0)
+        if biaya_bangunan > 0:
+            residu_bangunan = float(request.form.get('nilai_residu_bangunan', 0))
+            ekonomis_bangunan = float(request.form.get('nilai_ekonomis_bangunan', 1))
             
-            if nilai_ekonomis_bangunan > 0:
-                penyusutan_bangunan = (biaya_perolehan_bangunan - nilai_residu_bangunan) / nilai_ekonomis_bangunan
+            if ekonomis_bangunan > 0:
+                penyusutan = (biaya_bangunan - residu_bangunan) / ekonomis_bangunan
+                penyusutan = round(penyusutan, 2)
                 
-                if penyusutan_bangunan > 0:
+                if penyusutan > 0:
                     entries.append({
                         'kode_akun': '6-1200', 
                         'deskripsi': 'Beban Penyusutan Bangunan', 
-                        'debit': penyusutan_bangunan, 
+                        'debit': penyusutan, 
                         'kredit': 0
                     })
                     entries.append({
                         'kode_akun': '1-2210', 
                         'deskripsi': 'Akumulasi Penyusutan Bangunan', 
                         'debit': 0, 
-                        'kredit': penyusutan_bangunan
+                        'kredit': penyusutan
                     })
+                    total_debit += penyusutan
+                    total_kredit += penyusutan
+                    print(f"🔧 Bangunan - Penyusutan: Rp {penyusutan:,.0f}/tahun")
         
-        # PERALATAN (1-2100)
-        biaya_perolehan_peralatan = saldo_aset.get('1-2100', 0)
-        if biaya_perolehan_peralatan > 0:
-            nilai_residu_peralatan = float(request.form.get('nilai_residu_peralatan', 0))
-            nilai_ekonomis_peralatan = float(request.form.get('nilai_ekonomis_peralatan', 1))
+        # PERALATAN
+        biaya_peralatan = saldo_aset.get('1-2100', 0)
+        if biaya_peralatan > 0:
+            residu_peralatan = float(request.form.get('nilai_residu_peralatan', 0))
+            ekonomis_peralatan = float(request.form.get('nilai_ekonomis_peralatan', 1))
             
-            if nilai_ekonomis_peralatan > 0:
-                penyusutan_peralatan = (biaya_perolehan_peralatan - nilai_residu_peralatan) / nilai_ekonomis_peralatan
+            if ekonomis_peralatan > 0:
+                penyusutan = (biaya_peralatan - residu_peralatan) / ekonomis_peralatan
+                penyusutan = round(penyusutan, 2)
                 
-                if penyusutan_peralatan > 0:
+                if penyusutan > 0:
                     entries.append({
                         'kode_akun': '6-1100', 
                         'deskripsi': 'Beban Penyusutan Peralatan', 
-                        'debit': penyusutan_peralatan, 
+                        'debit': penyusutan, 
                         'kredit': 0
                     })
                     entries.append({
                         'kode_akun': '1-2110', 
                         'deskripsi': 'Akumulasi Penyusutan Peralatan', 
                         'debit': 0, 
-                        'kredit': penyusutan_peralatan
+                        'kredit': penyusutan
                     })
+                    total_debit += penyusutan
+                    total_kredit += penyusutan
+                    print(f"🔧 Peralatan - Penyusutan: Rp {penyusutan:,.0f}/tahun")
         
-        # Jika tidak ada penyusutan yang dihitung
+        print(f"🔧 Total Entries: {len(entries)}")
+        print(f"🔧 Total Debit: Rp {total_debit:,.2f}, Total Kredit: Rp {total_kredit:,.2f}")
+        
+        # 3. Validasi balance
+        if abs(total_debit - total_kredit) > 0.01:
+            error_msg = f"Jurnal tidak balance! Debit (Rp {total_debit:,.2f}) ≠ Kredit (Rp {total_kredit:,.2f})"
+            print(f"❌ {error_msg}")
+            return f"<script>alert('{error_msg}'); window.history.back();</script>"
+        
         if not entries:
-            return "<script>alert('Tidak ada penyusutan yang dapat dihitung! Pastikan aset memiliki saldo dan nilai ekonomis > 0.'); window.history.back();</script>"
+            return "<script>alert('Tidak ada penyusutan yang dapat dihitung!'); window.history.back();</script>"
         
-        # Simpan ke database (table jurnal_penyesuaian)
+        # 4. SIMPAN KE JURNAL PENYESUAIAN (BUKAN JURNAL UMUM)
         if save_journal_entries(tanggal, f"Penyesuaian - Penyusutan Aset", entries, "jurnal_penyesuaian"):
+            print(f"✅ Jurnal penyesuaian berhasil disimpan ke tabel jurnal_penyesuaian")
+            
+            # 5. LANGSUNG UPDATE NERACA SALDO SETELAH PENYESUAIAN
+            # (Dilakukan otomatis oleh fungsi get_neraca_saldo_setelah_penyesuaian())
+            
             return redirect("/laporan")
         else:
-            return "<script>alert('Error menyimpan jurnal penyesuaian! Jurnal tidak balance.'); window.history.back();</script>"
+            return "<script>alert('Error menyimpan jurnal penyesuaian!'); window.history.back();</script>"
         
     except Exception as e:
-        print(f"Error adding adjustment journal: {e}")
-        return "<script>alert('Error menyimpan jurnal penyesuaian!'); window.history.back();</script>"
-
+        print(f"❌ Error in tambah_jurnal_penyesuaian: {e}")
+        import traceback
+        traceback.print_exc()
+        return f"<script>alert('Error: {str(e)}'); window.history.back();</script>"
+    
 @app.route("/tambah_jurnal_penjualan_baru", methods=["POST"])
 def tambah_jurnal_penjualan_baru():
     if "user" not in session:
