@@ -1132,7 +1132,7 @@ def update_inventory(item_code, transaction_type, quantity, price, transaction_d
     except Exception as e:
         print(f"Error updating inventory: {e}")
         return False
-
+    
 # === Helper: Record inventory transaction ===
 def record_inventory_transaction(item_code, transaction_type, quantity, price, reference_id, description, transaction_date):
     """Record transaksi inventory untuk history dengan validasi"""
@@ -1776,6 +1776,43 @@ def update_inventory_stock(item_code, transaction_type, quantity):
             
     except Exception as e:
         print(f"Error updating inventory stock: {e}")
+        return False
+
+# === Helper: Record inventory transaction ===
+def record_inventory_transaction(item_code, transaction_type, quantity, price, reference_id, description, transaction_date):
+    """Record transaksi inventory untuk history"""
+    try:
+        item_res = supabase.table("inventory_items").select("id").eq("item_code", item_code).execute()
+        
+        if not item_res.data:
+            print(f"❌ Item {item_code} tidak ditemukan di tabel inventory_items")
+            return
+            
+        item_uuid = item_res.data[0]['id']
+        total_value = quantity * price
+        
+        transaction_data = {
+            "item_id": item_uuid,         
+            "transaction_type": transaction_type,
+            "quantity": quantity,
+            "unit_cost": price,               
+            "total_value": total_value,       
+            "reference_number": reference_id, 
+            "notes": description,  
+            "transaction_date": transaction_date
+        }
+        
+        # Simpan transaksi
+        supabase.table("inventory_transactions").insert(transaction_data).execute()
+        
+        # Update stok
+        update_inventory_stock(item_code, transaction_type, quantity)
+        
+        print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
+        return True
+        
+    except Exception as e:
+        print(f"Error recording inventory transaction: {e}")
         return False
 
 def process_sale_transaction(tanggal, customer, items, payment_method, shipping_cost=0, dp_amount=0):
