@@ -1135,11 +1135,11 @@ def update_inventory(item_code, transaction_type, quantity, price, transaction_d
 
 # === Helper: Record inventory transaction ===
 def record_inventory_transaction(item_code, transaction_type, quantity, price, reference_id, description, transaction_date):
-    """Record transaksi inventory untuk history dengan validasi"""
+    """Record transaksi inventory untuk history dengan LOGIKA STOK FISIK"""
     try:
         print(f"🔧 Recording inventory transaction: {item_code}, type: {transaction_type}, qty: {quantity}")
         
-        # Validasi input
+        # Validasi input - HANYA quantity yang penting untuk stok fisik
         if not item_code or quantity <= 0:
             print(f"❌ Invalid input: item_code={item_code}, quantity={quantity}")
             return False
@@ -1177,16 +1177,35 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
             print(f"❌ Error finding inventory item: {e}")
             return False
         
-        # Hitung total value
-        total_value = quantity
+        # HITUNG STOK BARU BERDASARKAN JENIS TRANSAKSI
+        current_stock = item_data['current_stock']
+        total_sold = item_data['total_sold']
+        
+        if transaction_type == 'PURCHASE':
+            new_stock = current_stock + quantity  # Stok bertambah
+            print(f"🔧 Stock IN: {current_stock} + {quantity} = {new_stock}")
+        elif transaction_type == 'SALE':
+            if current_stock < quantity:
+                print(f"❌ Insufficient stock: {current_stock} < {quantity}")
+                return False
+            new_stock = current_stock - quantity  # Stok berkurang
+            total_sold += quantity
+            print(f"🔧 Stock OUT: {current_stock} - {quantity} = {new_stock}")
+        elif transaction_type == 'ADJUSTMENT':
+            new_stock = quantity  # Set manual
+            print(f"🔧 Stock ADJUST: set to {quantity}")
+        else:
+            print(f"⚠ Unknown transaction type: {transaction_type}")
+            return False
         
         # Simpan transaksi ke tabel inventory_transactions
+        # HANYA CATAT quantity, harga untuk laporan keuangan saja
         transaction_data = {
             "item_code": item_code,
             "transaction_type": transaction_type,
             "quantity": quantity,
-            "price": 0,
-            "total_amount": 0,
+            "price": price,  # Hanya untuk catatan keuangan
+            "total_amount": quantity * price,
             "reference_id": reference_id,
             "description": description,
             "transaction_date": transaction_date,
@@ -1206,22 +1225,7 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
             print(f"❌ Error saving inventory transaction: {e}")
             return False
         
-        # Update stok berdasarkan jenis transaksi
-        current_stock = item_data['current_stock']
-        total_sold = item_data['total_sold']
-        
-        if transaction_type == 'PURCHASE':
-            new_stock = current_stock + quantity
-        elif transaction_type == 'SALE':
-            new_stock = current_stock - quantity
-            total_sold += quantity
-        elif transaction_type == 'ADJUSTMENT':
-            new_stock = quantity
-        else:
-            print(f"⚠ Unknown transaction type: {transaction_type}")
-            return False
-        
-        # Update inventory
+        # UPDATE STOK DI TABEL INVENTORY
         update_data = {
             "current_stock": new_stock,
             "total_sold": total_sold,
@@ -1234,7 +1238,8 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
             result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
             
             if result.data:
-                print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
+                print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity} units")
+                print(f"✅ Stock updated: {current_stock} -> {new_stock}")
                 return True
             else:
                 print(f"❌ Failed to update inventory: {item_code}")
@@ -1736,44 +1741,33 @@ def get_neraca_data():
 
 # === Helper: Update inventory stock ===
 def update_inventory_stock(item_code, transaction_type, quantity):
-    """Update stok inventory berdasarkan transaksi"""
+    """Update stok inventory berdasarkan transaksi - HANYA UNIT"""
     try:
         # Ambil data inventory saat ini
         inventory_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
         
         if not inventory_res.data:
             print(f"❌ Item {item_code} tidak ditemukan di inventory")
-            # Coba buat item baru
-            new_item = {
-                "item_code": item_code,
-                "item_name": "Ikan Patin",
-                "item_size": "8cm" if "8CM" in item_code else "10cm",
-                "current_stock": 0,
-                "purchase_price": 500 if "8CM" in item_code else 800,
-                "selling_price": 1000 if "8CM" in item_code else 1500,
-                "total_sold": 0
-            }
-            create_res = supabase.table("inventory").insert(new_item).execute()
-            if create_res.data:
-                print(f"✅ Created new inventory item: {item_code}")
-                current_stock = 0
-                total_sold = 0
-            else:
-                print(f"❌ Failed to create inventory item: {item_code}")
-                return False
-        else:
-            current_data = inventory_res.data[0]
-            current_stock = current_data['current_stock']
-            total_sold = current_data['total_sold']
+            return False
         
-        # Update berdasarkan jenis transaksi
+        current_data = inventory_res.data[0]
+        current_stock = current_data['current_stock']
+        total_sold = current_data['total_sold']
+        
+        # Update berdasarkan jenis transaksi - HANYA UNIT
         if transaction_type == 'PURCHASE':
             new_stock = current_stock + quantity
+            print(f"🔧 Stock IN: {current_stock} + {quantity} = {new_stock}")
         elif transaction_type == 'SALE':
+            if current_stock < quantity:
+                print(f"❌ Insufficient stock: {current_stock} < {quantity}")
+                return False
             new_stock = current_stock - quantity
             total_sold += quantity
+            print(f"🔧 Stock OUT: {current_stock} - {quantity} = {new_stock}")
         elif transaction_type == 'ADJUSTMENT':
             new_stock = quantity  # Set manual
+            print(f"🔧 Stock ADJUST: set to {quantity}")
         
         # Update inventory
         update_data = {
@@ -1788,7 +1782,7 @@ def update_inventory_stock(item_code, transaction_type, quantity):
             print(f"✅ Inventory stock updated: {item_code} {transaction_type} {quantity} units (from {current_stock} to {new_stock})")
             return True
         else:
-            print(f"❌ Failed to update inventory stock: {item_code} - {result.error}")
+            print(f"❌ Failed to update inventory stock: {item_code}")
             return False
             
     except Exception as e:
@@ -1834,6 +1828,7 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
 
 def process_sale_transaction(tanggal, customer, items, payment_method, shipping_cost=0, dp_amount=0):
     """Proses transaksi penjualan dengan auto-pelunasan DP di tanggal berikutnya - VERSI DIPERBAIKI"""
+    
     try:
         total_amount = sum(item['subtotal'] for item in items)
         jenis_transaksi = f"Penjualan - {customer}"
@@ -2003,7 +1998,7 @@ def process_sale_transaction(tanggal, customer, items, payment_method, shipping_
             print(f"❌ Kasus tidak dikenali: payment={payment_method}, shipping={shipping_cost}, dp={dp_amount}")
             success = False
 
-        # Update inventory untuk semua kasus yang berhasil
+         # Update inventory untuk semua kasus yang berhasil
         if success:
             for item in items:
                 item_code = "PATIN-8CM" if item['jenis_ikan'] == '8cm' else "PATIN-10CM"
@@ -2011,11 +2006,12 @@ def process_sale_transaction(tanggal, customer, items, payment_method, shipping_
                 print(f"🔧 Updating inventory for {item_code}: {item['quantity']} units")
                 
                 # Gunakan fungsi record_inventory_transaction yang sudah diperbaiki
+                # HANYA quantity yang mempengaruhi stok, harga hanya untuk catatan
                 inventory_success = record_inventory_transaction(
                     item_code, 
                     'SALE',
                     item['quantity'], 
-                    item['selling_price'], 
+                    item['selling_price'],  # Harga hanya untuk catatan, tidak pengaruhi stok
                     f"SO-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     f"Penjualan {item['jenis_ikan']} - {customer}",
                     tanggal
@@ -2025,6 +2021,8 @@ def process_sale_transaction(tanggal, customer, items, payment_method, shipping_
                     print(f"✅ Inventory updated for {item_code}: -{item['quantity']} units")
                 else:
                     print(f"⚠ Gagal update inventory untuk {item_code}")
+                    # Jangan return False di sini, karena jurnal sudah berhasil
+                    # Cukup log warning saja
 
             # Simpan data penjualan
             sale_data = {
@@ -7328,20 +7326,20 @@ def tambah_stok_simple():
         
         keterangan = f'Pembelian {jenis_ikan} - {supplier}'
         
-        # Update inventory
+        # Update inventory - HANYA quantity yang penting
         doc_no = f"PO-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        success = record_inventory_transaction(
+        inventory_success = record_inventory_transaction(
             item_code, 
             'PURCHASE', 
             jumlah, 
-            harga_beli, 
+            harga_beli,  # Harga hanya untuk catatan, tidak pengaruhi stok
             doc_no, 
             keterangan, 
             tanggal
         )
         
-        if success:
-            # Buat jurnal pembelian
+        if inventory_success:
+            # Buat jurnal pembelian untuk laporan keuangan
             entries = []
             total_pembelian = jumlah * harga_beli
             
@@ -7359,9 +7357,10 @@ def tambah_stok_simple():
                 'kredit': total_pembelian
             })
             
-            save_journal_entries(tanggal, f"Pembelian {jenis_ikan}", entries)
+            journal_success = save_journal_entries(tanggal, f"Pembelian {jenis_ikan}", entries)
             
             print(f"✅ Stock addition completed: {item_code} +{jumlah}")
+            print(f"✅ Journal status: {'SUCCESS' if journal_success else 'FAILED'}")
             return redirect("/barang")
         else:
             error_msg = "Gagal menambah stok! Periksa console untuk detail."
