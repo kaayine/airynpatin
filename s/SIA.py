@@ -1137,38 +1137,75 @@ def update_inventory(item_code, transaction_type, quantity, price, transaction_d
 def record_inventory_transaction(item_code, transaction_type, quantity, price, reference_id, description, transaction_date):
     """Record transaksi inventory untuk history"""
     try:
-        # Cari item_id berdasarkan item_code
-        item_res = supabase.table("inventory_items").select("id").eq("item_code", item_code).execute()
+        # Cari item berdasarkan item_code di tabel inventory (bukan inventory_items)
+        item_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
         
         if not item_res.data:
-            print(f"❌ Item {item_code} tidak ditemukan di tabel inventory_items")
+            print(f"❌ Item {item_code} tidak ditemukan di tabel inventory")
             return False
             
-        item_uuid = item_res.data[0]['id']
+        item_data = item_res.data[0]
         total_value = quantity * price
         
+        # Simpan transaksi ke tabel inventory_transactions
         transaction_data = {
-            "item_id": item_uuid,         
+            "item_code": item_code,  # Gunakan item_code langsung
             "transaction_type": transaction_type,
             "quantity": quantity,
-            "unit_cost": price,               
-            "total_value": total_value,       
-            "reference_number": reference_id, 
-            "notes": description,  
-            "transaction_date": transaction_date
+            "price": price,  # Pastikan field name sesuai dengan tabel
+            "total_amount": total_value,
+            "reference_id": reference_id,
+            "description": description,
+            "transaction_date": transaction_date,
+            "created_at": datetime.now().isoformat()
         }
         
+        print(f"🔧 Saving inventory transaction: {transaction_data}")
+        
         # Simpan transaksi
-        supabase.table("inventory_transactions").insert(transaction_data).execute()
+        result = supabase.table("inventory_transactions").insert(transaction_data).execute()
         
-        # Update stok
-        update_inventory_stock(item_code, transaction_type, quantity)
+        if not result.data:
+            print(f"❌ Failed to save inventory transaction")
+            return False
         
-        print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
-        return True
+        # Update stok berdasarkan jenis transaksi
+        current_stock = item_data['current_stock']
+        total_sold = item_data['total_sold']
+        
+        if transaction_type == 'PURCHASE':
+            new_stock = current_stock + quantity
+        elif transaction_type == 'SALE':
+            new_stock = current_stock - quantity
+            total_sold += quantity
+        elif transaction_type == 'ADJUSTMENT':
+            new_stock = quantity  # Untuk adjustment, set langsung
+        else:
+            print(f"⚠ Unknown transaction type: {transaction_type}")
+            return False
+        
+        # Update inventory
+        update_data = {
+            "current_stock": new_stock,
+            "total_sold": total_sold,
+            "updated_at": datetime.now().isoformat()
+        }
+        
+        print(f"🔧 Updating inventory stock: {item_code} -> {new_stock}")
+        
+        result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
+        
+        if result.data:
+            print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
+            return True
+        else:
+            print(f"❌ Failed to update inventory: {item_code}")
+            return False
         
     except Exception as e:
-        print(f"Error recording inventory transaction: {e}")
+        print(f"❌ Error recording inventory transaction: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 # === Helper: Get inventory summary ===
@@ -1871,9 +1908,11 @@ def process_sale_transaction(tanggal, customer, items, payment_method, shipping_
         if success:
             for item in items:
                 item_code = "PATIN-8CM" if item['jenis_ikan'] == '8cm' else "PATIN-10CM"
+                
+                # Gunakan fungsi record_inventory_transaction yang sudah diperbaiki
                 inventory_success = record_inventory_transaction(
                     item_code, 
-                    'SALE', 
+                    'SALE',  # Pastikan menggunakan 'SALE' bukan 'SALES'
                     item['quantity'], 
                     item['selling_price'], 
                     f"SO-{datetime.now().strftime('%Y%m%d%H%M%S')}",
