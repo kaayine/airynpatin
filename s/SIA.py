@@ -1178,15 +1178,15 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
             return False
         
         # Hitung total value
-        total_value = quantity * price
+        total_value = quantity
         
         # Simpan transaksi ke tabel inventory_transactions
         transaction_data = {
             "item_code": item_code,
             "transaction_type": transaction_type,
             "quantity": quantity,
-            "price": price,
-            "total_amount": total_value,
+            "price": 0,
+            "total_amount": 0,
             "reference_id": reference_id,
             "description": description,
             "transaction_date": transaction_date,
@@ -5142,6 +5142,59 @@ def laporan():
                 </div>
             </div>
             
+            <!-- TAB 11: LAPORAN ARUS KAS -->
+<div id="laporan-arus-kas" class="tab-content">
+    <div class="card">
+        <div class="card-header">
+            <h2 class="card-title">Laporan Arus Kas - Toko Ikan Patin</h2>
+            <p style="color: #64748b; margin: 0;">Metode Langsung - Periode: ''' + date.today().strftime("%d %B %Y") + '''</p>
+        </div>
+        
+        <div class="laporan-keuangan-container">
+            <div class="laporan-section">
+                <div class="laporan-header">
+                    <h3 style="margin: 0; color: white;">LAPORAN ARUS KAS</h3>
+                    <p style="margin: 0.5rem 0 0 0; color: #e0e7ff;">Metode Langsung - Periode Berjalan</p>
+                </div>
+                <div class="laporan-body">
+                    <div style="background: #f0f9ff; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
+                        <h4 style="color: #0369a1; margin-bottom: 1rem;">AKTIVITAS OPERASI</h4>
+                        <div class="laporan-row">
+                            <span>Kas diterima dari pelanggan:</span>
+                            <span class="laporan-positive">Rp ''' + f"{arus_kas_data.get('kas_diterima_pelanggan', 0):,.0f}" + '''</span>
+                        </div>
+                        <div class="laporan-row">
+                            <span>Kas keluar untuk pembelian:</span>
+                            <span class="laporan-negative">(Rp ''' + f"{arus_kas_data.get('kas_keluar_pembelian', 0):,.0f}" + ''')</span>
+                        </div>
+                        <div class="laporan-row">
+                            <span>Kas keluar untuk beban:</span>
+                            <span class="laporan-negative">(Rp ''' + f"{arus_kas_data.get('kas_keluar_beban', 0):,.0f}" + ''')</span>
+                        </div>
+                        <div class="laporan-row laporan-total">
+                            <span><strong>Kas Bersih dari Aktivitas Operasi:</strong></span>
+                            <span class="''' + ("laporan-positive" if arus_kas_data.get('kas_bersih_operasi', 0) >= 0 else "laporan-negative") + '''">
+                                <strong>Rp ''' + f"{abs(arus_kas_data.get('kas_bersih_operasi', 0)):,.0f}" + '''</strong>
+                            </span>
+                        </div>
+                    </div>
+                    
+                    <!-- Aktivitas Investasi dan Pendanaan bisa ditambahkan nanti -->
+                    
+                    <div class="laporan-row">
+                        <span>Saldo Kas Awal:</span>
+                        <span>Rp ''' + f"{arus_kas_data.get('saldo_kas_awal', 0):,.0f}" + '''</span>
+                    </div>
+                    <div class="laporan-row laporan-total laporan-positive">
+                        <span><strong>Saldo Kas Akhir:</strong></span>
+                        <span><strong>Rp ''' + f"{arus_kas_data.get('saldo_kas_akhir', 0):,.0f}" + '''</strong></span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
             <!-- TAB BARU: JURNAL PENUTUP -->
             <div id="jurnal-penutup" class="tab-content">
                 <div class="card">
@@ -6717,7 +6770,7 @@ def tambah_jurnal_penjualan_baru():
                     item_code, 
                     'SALE', 
                     item['quantity'], 
-                    item['selling_price'],
+                    0,
                     f"SO-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     f"Penjualan {item['jenis_ikan']} - {customer}",
                     tanggal
@@ -6840,7 +6893,7 @@ def tambah_jurnal_pembelian():
                     item_code, 
                     'PURCHASE', 
                     kuantitas, 
-                    harga_per_unit,
+                    0,
                     f"PO-{datetime.now().strftime('%Y%m%d%H%M%S')}",
                     f"Pembelian {jenis_ikan} - {supplier}",
                     tanggal
