@@ -5092,109 +5092,6 @@ def laporan():
                         </div>
                     </div>
                     <div class="jurnal-container">
-            // === FUNGSI JURNAL PENUTUP ===
-// ==================== JURNAL PENUTUP FUNCTIONS ====================
-async function generateJurnalPenutup() {
-    console.log("🔧 Generating closing entries...");
-    
-    const loadingBtn = event.target;
-    const originalText = loadingBtn.innerHTML;
-    loadingBtn.innerHTML = '<i class="ri-loader-4-line spin"></i> Processing...';
-    loadingBtn.disabled = true;
-    
-    try {
-        const response = await fetch('/api/generate_jurnal_penutup', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Requested-With': 'XMLHttpRequest'
-            }
-        });
-        
-        const result = await response.json();
-        
-        if (result.success) {
-            alert(`✅ ${result.message}\n\n${result.count} entries generated.`);
-            
-            // Jika ingin auto-save, uncomment ini:
-            // await saveJurnalPenutup();
-            
-            // Refresh tab
-            openTab('jurnal-penutup');
-            // Reload data setelah 1 detik
-            setTimeout(() => {
-                location.href = '/laporan#jurnal-penutup';
-            }, 1000);
-            
-        } else {
-            alert(`❌ ${result.message}`);
-        }
-        
-    } catch (error) {
-        console.error('Error:', error);
-        alert('❌ Network error! Check console.');
-    } finally {
-        loadingBtn.innerHTML = originalText;
-        loadingBtn.disabled = false;
-    }
-}
-
-async function prosesPenutupanPeriode() {
-    if (!confirm('⚠️ FINAL STEP: PENUTUPAN PERIODE\n\nSetelah ini:\n• Akun nominal akan NOL\n• Laba/Rugi masuk ke Modal\n• Periode baru dimulai\n\nLanjutkan?')) {
-        return;
-    }
-    
-    const loadingBtn = event.target;
-    const originalText = loadingBtn.innerHTML;
-    loadingBtn.innerHTML = '<i class="ri-loader-4-line spin"></i> Menutup Periode...';
-    loadingBtn.disabled = true;
-    
-    try {
-        // 1. Generate
-        const genResponse = await fetch('/api/generate_jurnal_penutup', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-        const genResult = await genResponse.json();
-        
-        if (!genResult.success) {
-            throw new Error(genResult.message);
-        }
-        
-        // 2. Save
-        const saveResponse = await fetch('/api/save_jurnal_penutup', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/json'}
-        });
-        const saveResult = await saveResponse.json();
-        
-        if (saveResult.success) {
-            alert(`🎉 PERIODE DITUTUP!\n\n${saveResult.message}\n\nSistem siap untuk periode baru.`);
-            location.href = '/laporan#neraca-saldo-penutupan';
-        } else {
-            throw new Error(saveResult.message);
-        }
-        
-    } catch (error) {
-        alert(`❌ Gagal: ${error.message}`);
-    } finally {
-        loadingBtn.innerHTML = originalText;
-        loadingBtn.disabled = false;
-    }
-}
-
-// CSS untuk spinner
-const style = document.createElement('style');
-style.textContent = `
-    .spin {
-        animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-        0% { transform: rotate(0deg); }
-        100% { transform: rotate(360deg); }
-    }
-`;
-document.head.appendChild(style);
         """
         
         # Tampilkan data jurnal penutup
@@ -6640,7 +6537,7 @@ function hitungTotal() {
         </script>
         """
 
-        return render_template_string(base_template, title="Laporan Keuangan", content=laporan_content, jurnal_penutup_data=jurnal_penutup_data, neraca_saldo_penutupan=neraca_saldo_penutupan )
+        return render_template_string(base_template, title="Laporan Keuangan", content=laporan_content)
 
 # === ROUTES UNTUK JURNAL ===
 
@@ -8071,4 +7968,3 @@ if __name__ == "__main__":
     setup_default_accounts()
     setup_default_inventory_items()  
     app.run(debug=True, port=5000)
-
