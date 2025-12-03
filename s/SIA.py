@@ -723,24 +723,260 @@ def get_laporan_perubahan_modal():
 
 # === Helper: Get jurnal penutup ===
 def get_jurnal_penutup_data():
-    """AMBIL atau GENERATE jurnal penutup secara real-time"""
+    """Generate jurnal penutup berdasarkan struktur yang benar"""
     try:
-        print("🔍 DEBUG: get_jurnal_penutup_data() - Real-time mode")
+        # Ambil data laba rugi dan neraca
+        laba_rugi_data = get_laba_rugi_data()
+        neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
         
-        # Langsung hitung real-time dari data yang ada
-        jurnal_penutup = calculate_jurnal_penutup_real_time()
+        jurnal_penutup = []
         
-        if jurnal_penutup:
-            print(f"✅ Jurnal penutup real-time: {len(jurnal_penutup)} entries")
-            return jurnal_penutup
-        else:
-            print("⚠ Tidak ada data untuk jurnal penutup")
-            return []
+        # ==================== 1. TUTUP AKUN PENDAPATAN ====================
+        print("🔧 1. Menutup akun pendapatan...")
+        
+        # Cari saldo akun pendapatan
+        pendapatan_8cm = 0
+        pendapatan_10cm = 0
+        beban_angkut_penjualan = 0
+        
+        for item in neraca_setelah_penyesuaian:
+            if item['kode_akun'] == '4-1000':  # Pendapatan 8cm
+                pendapatan_8cm = item['kredit'] if item['kredit'] > 0 else 0
+            elif item['kode_akun'] == '4-1100':  # Pendapatan 10cm
+                pendapatan_10cm = item['kredit'] if item['kredit'] > 0 else 0
+            elif item['kode_akun'] == '5-1200':  # Beban Angkut Penjualan
+                beban_angkut_penjualan = item['debit'] if item['debit'] > 0 else 0
+        
+        # Jurnal penutup pendapatan
+        if pendapatan_8cm > 0:
+            jurnal_penutup.append({
+                'kode_akun': '4-1000',
+                'nama_akun': 'Penjualan Ikan Patin 8 cm',
+                'debit': pendapatan_8cm,
+                'kredit': 0,
+                'keterangan': 'Penutupan pendapatan 8cm'
+            })
+        
+        if pendapatan_10cm > 0:
+            jurnal_penutup.append({
+                'kode_akun': '4-1100',
+                'nama_akun': 'Penjualan Ikan Patin 10 cm',
+                'debit': pendapatan_10cm,
+                'kredit': 0,
+                'keterangan': 'Penutupan pendapatan 10cm'
+            })
+        
+        # Kredit ke Ikhtisar Laba Rugi untuk total pendapatan
+        total_pendapatan = pendapatan_8cm + pendapatan_10cm
+        if total_pendapatan > 0:
+            jurnal_penutup.append({
+                'kode_akun': '3-1100',
+                'nama_akun': 'Ikhtisar Laba Rugi',
+                'debit': 0,
+                'kredit': total_pendapatan,
+                'keterangan': 'Penutupan total pendapatan'
+            })
+        
+        # ==================== 2. TUTUP AKUN HPP ====================
+        print("🔧 2. Menutup akun HPP...")
+        
+        # Cari saldo akun HPP
+        pembelian_8cm = 0
+        pembelian_10cm = 0
+        beban_angkut_pembelian = 0
+        
+        for item in neraca_setelah_penyesuaian:
+            if item['kode_akun'] == '5-1000':  # HPP
+                # Untuk HPP, kita perlu detail komponennya
+                pass
+            elif item['kode_akun'] == '5-1300':  # Beban Angkut Pembelian
+                beban_angkut_pembelian = item['debit'] if item['debit'] > 0 else 0
+        
+        # Cari pembelian dari jurnal umum
+        jurnal_res = supabase.table("jurnal_umum").select("*").execute()
+        if jurnal_res.data:
+            for jurnal in jurnal_res.data:
+                if 'Pembelian' in jurnal['jenis_transaksi']:
+                    if jurnal['kode_akun'] == '1-1200':  # Pembelian 8cm
+                        pembelian_8cm += jurnal['debit']
+                    elif jurnal['kode_akun'] == '1-1300':  # Pembelian 10cm
+                        pembelian_10cm += jurnal['debit']
+        
+        total_hpp = pembelian_8cm + pembelian_10cm + beban_angkut_pembelian
+        
+        # Jurnal penutup HPP
+        if total_hpp > 0:
+            # Debit Ikhtisar Laba Rugi
+            jurnal_penutup.append({
+                'kode_akun': '3-1100',
+                'nama_akun': 'Ikhtisar Laba Rugi',
+                'debit': total_hpp,
+                'kredit': 0,
+                'keterangan': 'Penutupan HPP'
+            })
+            
+            # Kredit komponen HPP
+            if pembelian_8cm > 0:
+                jurnal_penutup.append({
+                    'kode_akun': '1-1200',
+                    'nama_akun': 'Persediaan Ikan Patin 8 cm',
+                    'debit': 0,
+                    'kredit': pembelian_8cm,
+                    'keterangan': 'Penutupan pembelian 8cm'
+                })
+            
+            if pembelian_10cm > 0:
+                jurnal_penutup.append({
+                    'kode_akun': '1-1300',
+                    'nama_akun': 'Persediaan Ikan Patin 10 cm',
+                    'debit': 0,
+                    'kredit': pembelian_10cm,
+                    'keterangan': 'Penutupan pembelian 10cm'
+                })
+            
+            if beban_angkut_pembelian > 0:
+                jurnal_penutup.append({
+                    'kode_akun': '5-1300',
+                    'nama_akun': 'Beban Angkut Pembelian',
+                    'debit': 0,
+                    'kredit': beban_angkut_pembelian,
+                    'keterangan': 'Penutupan beban angkut pembelian'
+                })
+        
+        # ==================== 3. TUTUP AKUN BEBAN ====================
+        print("🔧 3. Menutup akun beban...")
+        
+        # Cari saldo akun beban
+        beban_listrik = 0
+        beban_penyusutan_kendaraan = 0
+        beban_penyusutan_peralatan = 0
+        beban_penyusutan_bangunan = 0
+        
+        for item in neraca_setelah_penyesuaian:
+            if item['kode_akun'] == '5-1100':  # Beban Listrik dan Air
+                beban_listrik = item['debit'] if item['debit'] > 0 else 0
+            elif item['kode_akun'] == '6-1000':  # Beban Penyusutan Kendaraan
+                beban_penyusutan_kendaraan = item['debit'] if item['debit'] > 0 else 0
+            elif item['kode_akun'] == '6-1100':  # Beban Penyusutan Peralatan
+                beban_penyusutan_peralatan = item['debit'] if item['debit'] > 0 else 0
+            elif item['kode_akun'] == '6-1200':  # Beban Penyusutan Bangunan
+                beban_penyusutan_bangunan = item['debit'] if item['debit'] > 0 else 0
+        
+        total_beban = beban_listrik + beban_penyusutan_kendaraan + beban_penyusutan_peralatan + beban_penyusutan_bangunan
+        
+        # Jurnal penutup beban
+        if total_beban > 0:
+            # Debit Ikhtisar Laba Rugi
+            jurnal_penutup.append({
+                'kode_akun': '3-1100',
+                'nama_akun': 'Ikhtisar Laba Rugi',
+                'debit': total_beban,
+                'kredit': 0,
+                'keterangan': 'Penutupan total beban'
+            })
+            
+            # Kredit masing-masing akun beban
+            if beban_listrik > 0:
+                jurnal_penutup.append({
+                    'kode_akun': '5-1100',
+                    'nama_akun': 'Beban Listrik dan Air',
+                    'debit': 0,
+                    'kredit': beban_listrik,
+                    'keterangan': 'Penutupan beban listrik'
+                })
+            
+            if beban_penyusutan_kendaraan > 0:
+                jurnal_penutup.append({
+                    'kode_akun': '6-1000',
+                    'nama_akun': 'Beban Penyusutan Kendaraan',
+                    'debit': 0,
+                    'kredit': beban_penyusutan_kendaraan,
+                    'keterangan': 'Penutupan beban penyusutan kendaraan'
+                })
+            
+            if beban_penyusutan_peralatan > 0:
+                jurnal_penutup.append({
+                    'kode_akun': '6-1100',
+                    'nama_akun': 'Beban Penyusutan Peralatan',
+                    'debit': 0,
+                    'kredit': beban_penyusutan_peralatan,
+                    'keterangan': 'Penutupan beban penyusutan peralatan'
+                })
+            
+            if beban_penyusutan_bangunan > 0:
+                jurnal_penutup.append({
+                    'kode_akun': '6-1200',
+                    'nama_akun': 'Beban Penyusutan Bangunan',
+                    'debit': 0,
+                    'kredit': beban_penyusutan_bangunan,
+                    'keterangan': 'Penutupan beban penyusutan bangunan'
+                })
+        
+        # ==================== 4. TUTUP LABA KE MODAL ====================
+        print("🔧 4. Menutup laba ke modal...")
+        
+        laba_bersih = laba_rugi_data['laba_bersih']
+        
+        if laba_bersih >= 0:  # Laba
+            jurnal_penutup.append({
+                'kode_akun': '3-1100',
+                'nama_akun': 'Ikhtisar Laba Rugi',
+                'debit': laba_bersih,
+                'kredit': 0,
+                'keterangan': 'Penutupan laba bersih'
+            })
+            jurnal_penutup.append({
+                'kode_akun': '3-1000',
+                'nama_akun': 'Modal Usaha',
+                'debit': 0,
+                'kredit': laba_bersih,
+                'keterangan': 'Penutupan laba bersih ke modal'
+            })
+        else:  # Rugi
+            jurnal_penutup.append({
+                'kode_akun': '3-1000',
+                'nama_akun': 'Modal Usaha',
+                'debit': abs(laba_bersih),
+                'kredit': 0,
+                'keterangan': 'Penutupan rugi bersih'
+            })
+            jurnal_penutup.append({
+                'kode_akun': '3-1100',
+                'nama_akun': 'Ikhtisar Laba Rugi',
+                'debit': 0,
+                'kredit': abs(laba_bersih),
+                'keterangan': 'Penutupan rugi bersih'
+            })
+        
+        # ==================== 5. TUTUP PRIVE ====================
+        print("🔧 5. Menutup prive...")
+        
+        prive_saldo = 0
+        for item in neraca_setelah_penyesuaian:
+            if item['kode_akun'] == '3-1200':  # Prive
+                prive_saldo = item['debit'] if item['debit'] > 0 else 0
+        
+        if prive_saldo > 0:
+            jurnal_penutup.append({
+                'kode_akun': '3-1000',
+                'nama_akun': 'Modal Usaha',
+                'debit': prive_saldo,
+                'kredit': 0,
+                'keterangan': 'Penutupan prive'
+            })
+            jurnal_penutup.append({
+                'kode_akun': '3-1200',
+                'nama_akun': 'Prive',
+                'debit': 0,
+                'kredit': prive_saldo,
+                'keterangan': 'Penutupan prive'
+            })
+        
+        print(f"✅ Jurnal penutup berhasil digenerate: {len(jurnal_penutup)} entries")
+        return jurnal_penutup
         
     except Exception as e:
-        print(f"❌ Error in get_jurnal_penutup_data: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"❌ Error generating jurnal penutup: {e}")
         return []
     
 # === Helper: Get neraca saldo setelah penutupan ===
@@ -850,255 +1086,6 @@ def get_neraca_saldo_setelah_penutupan():
         
     except Exception as e:
         print(f"❌ Error getting neraca saldo setelah penutupan: {e}")
-        import traceback
-        traceback.print_exc()
-        return []
-    
-def calculate_jurnal_penutup_real_time():
-    """Hitung jurnal penutup langsung dari data transaksi yang ada"""
-    try:
-        print("🔧 CALCULATE JURNAL PENUTUP REAL-TIME")
-        
-        # 1. Ambil data laba rugi
-        laba_rugi_data = get_laba_rugi_data()
-        laba_bersih = laba_rugi_data.get('laba_bersih', 0)
-        print(f"🔧 Laba bersih: Rp {laba_bersih:,.0f}")
-        
-        # 2. Ambil neraca setelah penyesuaian
-        neraca_setelah = get_neraca_saldo_setelah_penyesuaian()
-        
-        if not neraca_setelah:
-            print("❌ Tidak ada data neraca setelah penyesuaian")
-            return []
-        
-        print(f"🔧 NSSP entries: {len(neraca_setelah)}")
-        
-        # 3. Kumpulkan saldo akun nominal (4-, 5-, 6-)
-        pendapatan_8cm = 0
-        pendapatan_10cm = 0
-        hpp = 0
-        beban_listrik = 0
-        beban_angkut_penjualan = 0
-        beban_angkut_pembelian = 0
-        beban_penyusutan = 0
-        prive = 0
-        modal = 0
-        
-        for item in neraca_setelah:
-            kode = item['kode_akun']
-            saldo_debit = item.get('debit', 0)
-            saldo_kredit = item.get('kredit', 0)
-            saldo = saldo_debit - saldo_kredit  # debit positif, kredit negatif
-            
-            # Akun Nominal (akan ditutup)
-            if kode == '4-1000':  # Pendapatan 8cm
-                pendapatan_8cm = saldo_kredit  # Normal balance kredit
-            elif kode == '4-1100':  # Pendapatan 10cm
-                pendapatan_10cm = saldo_kredit
-            elif kode == '5-1000':  # HPP
-                hpp = saldo_debit
-            elif kode == '5-1100':  # Beban Listrik
-                beban_listrik = saldo_debit
-            elif kode == '5-1200':  # Beban Angkut Penjualan
-                beban_angkut_penjualan = saldo_debit
-            elif kode == '5-1300':  # Beban Angkut Pembelian
-                beban_angkut_pembelian = saldo_debit
-            elif kode.startswith('6-'):  # Beban Penyesuaian
-                beban_penyusutan += saldo_debit
-            elif kode == '3-1000':  # Modal
-                modal = saldo_kredit
-            elif kode == '3-1200':  # Prive
-                prive = saldo_debit
-        
-        print(f"🔧 Data collected:")
-        print(f"   Pendapatan 8cm: {pendapatan_8cm}")
-        print(f"   Pendapatan 10cm: {pendapatan_10cm}")
-        print(f"   HPP: {hpp}")
-        print(f"   Beban: {beban_listrik + beban_angkut_penjualan + beban_angkut_pembelian + beban_penyusutan}")
-        
-        # 4. Buat jurnal penutup
-        jurnal_penutup = []
-        
-        # 4.1 TUTUP PENDAPATAN → ke Ikhtisar Laba Rugi
-        if pendapatan_8cm > 0:
-            jurnal_penutup.append({
-                'kode_akun': '4-1000',
-                'nama_akun': 'Penjualan Ikan Patin 8 cm',
-                'debit': pendapatan_8cm,
-                'kredit': 0,
-                'keterangan': 'Penutupan pendapatan ke Ikhtisar LR'
-            })
-            jurnal_penutup.append({
-                'kode_akun': '3-1100',
-                'nama_akun': 'Ikhtisar Laba Rugi',
-                'debit': 0,
-                'kredit': pendapatan_8cm,
-                'keterangan': 'Penutupan pendapatan 8cm'
-            })
-        
-        if pendapatan_10cm > 0:
-            jurnal_penutup.append({
-                'kode_akun': '4-1100',
-                'nama_akun': 'Penjualan Ikan Patin 10 cm',
-                'debit': pendapatan_10cm,
-                'kredit': 0,
-                'keterangan': 'Penutupan pendapatan ke Ikhtisar LR'
-            })
-            jurnal_penutup.append({
-                'kode_akun': '3-1100',
-                'nama_akun': 'Ikhtisar Laba Rugi',
-                'debit': 0,
-                'kredit': pendapatan_10cm,
-                'keterangan': 'Penutupan pendapatan 10cm'
-            })
-        
-        # 4.2 TUTUP HPP → ke Ikhtisar Laba Rugi (Debit)
-        if hpp > 0:
-            jurnal_penutup.append({
-                'kode_akun': '3-1100',
-                'nama_akun': 'Ikhtisar Laba Rugi',
-                'debit': hpp,
-                'kredit': 0,
-                'keterangan': 'Penutupan HPP'
-            })
-            jurnal_penutup.append({
-                'kode_akun': '5-1000',
-                'nama_akun': 'Harga Pokok Penjualan',
-                'debit': 0,
-                'kredit': hpp,
-                'keterangan': 'Penutupan HPP'
-            })
-        
-        # 4.3 TUTUP BEBAN → ke Ikhtisar Laba Rugi (Debit)
-        total_beban = beban_listrik + beban_angkut_penjualan + beban_angkut_pembelian + beban_penyusutan
-        
-        if beban_listrik > 0:
-            jurnal_penutup.append({
-                'kode_akun': '3-1100',
-                'nama_akun': 'Ikhtisar Laba Rugi',
-                'debit': beban_listrik,
-                'kredit': 0,
-                'keterangan': 'Penutupan beban listrik'
-            })
-            jurnal_penutup.append({
-                'kode_akun': '5-1100',
-                'nama_akun': 'Beban Listrik dan Air',
-                'debit': 0,
-                'kredit': beban_listrik,
-                'keterangan': 'Penutupan beban listrik'
-            })
-        
-        if beban_angkut_penjualan > 0:
-            jurnal_penutup.append({
-                'kode_akun': '3-1100',
-                'nama_akun': 'Ikhtisar Laba Rugi',
-                'debit': beban_angkut_penjualan,
-                'kredit': 0,
-                'keterangan': 'Penutupan beban angkut penjualan'
-            })
-            jurnal_penutup.append({
-                'kode_akun': '5-1200',
-                'nama_akun': 'Beban Angkut Penjualan',
-                'debit': 0,
-                'kredit': beban_angkut_penjualan,
-                'keterangan': 'Penutupan beban angkut penjualan'
-            })
-        
-        if beban_angkut_pembelian > 0:
-            jurnal_penutup.append({
-                'kode_akun': '3-1100',
-                'nama_akun': 'Ikhtisar Laba Rugi',
-                'debit': beban_angkut_pembelian,
-                'kredit': 0,
-                'keterangan': 'Penutupan beban angkut pembelian'
-            })
-            jurnal_penutup.append({
-                'kode_akun': '5-1300',
-                'nama_akun': 'Beban Angkut Pembelian',
-                'debit': 0,
-                'kredit': beban_angkut_pembelian,
-                'keterangan': 'Penutupan beban angkut pembelian'
-            })
-        
-        if beban_penyusutan > 0:
-            jurnal_penutup.append({
-                'kode_akun': '3-1100',
-                'nama_akun': 'Ikhtisar Laba Rugi',
-                'debit': beban_penyusutan,
-                'kredit': 0,
-                'keterangan': 'Penutupan beban penyusutan'
-            })
-            # Cari semua akun beban penyusutan
-            for item in neraca_setelah:
-                if item['kode_akun'].startswith('6-') and item['debit'] > 0:
-                    jurnal_penutup.append({
-                        'kode_akun': item['kode_akun'],
-                        'nama_akun': item['nama_akun'],
-                        'debit': 0,
-                        'kredit': item['debit'],
-                        'keterangan': 'Penutupan beban penyusutan'
-                    })
-        
-        # 4.4 TUTUP IKHTISAR LABA RUGI → ke MODAL
-        if laba_bersih != 0:
-            if laba_bersih > 0:  # Laba
-                jurnal_penutup.append({
-                    'kode_akun': '3-1100',
-                    'nama_akun': 'Ikhtisar Laba Rugi',
-                    'debit': laba_bersih,
-                    'kredit': 0,
-                    'keterangan': 'Penutupan laba bersih ke modal'
-                })
-                jurnal_penutup.append({
-                    'kode_akun': '3-1000',
-                    'nama_akun': 'Modal Usaha',
-                    'debit': 0,
-                    'kredit': laba_bersih,
-                    'keterangan': 'Penutupan laba bersih'
-                })
-            else:  # Rugi
-                jurnal_penutup.append({
-                    'kode_akun': '3-1000',
-                    'nama_akun': 'Modal Usaha',
-                    'debit': abs(laba_bersih),
-                    'kredit': 0,
-                    'keterangan': 'Penutupan rugi bersih'
-                })
-                jurnal_penutup.append({
-                    'kode_akun': '3-1100',
-                    'nama_akun': 'Ikhtisar Laba Rugi',
-                    'debit': 0,
-                    'kredit': abs(laba_bersih),
-                    'keterangan': 'Penutupan rugi bersih'
-                })
-        
-        # 4.5 TUTUP PRIVE → ke MODAL
-        if prive > 0:
-            jurnal_penutup.append({
-                'kode_akun': '3-1000',
-                'nama_akun': 'Modal Usaha',
-                'debit': prive,
-                'kredit': 0,
-                'keterangan': 'Penutupan prive ke modal'
-            })
-            jurnal_penutup.append({
-                'kode_akun': '3-1200',
-                'nama_akun': 'Prive',
-                'debit': 0,
-                'kredit': prive,
-                'keterangan': 'Penutupan prive'
-            })
-        
-        print(f"✅ Jurnal penutup real-time generated: {len(jurnal_penutup)} entries")
-        
-        # Debug: Tampilkan beberapa entries
-        for i, entry in enumerate(jurnal_penutup[:5]):
-            print(f"  {i+1}. {entry['kode_akun']}: D={entry['debit']}, K={entry['kredit']}")
-        
-        return jurnal_penutup
-        
-    except Exception as e:
-        print(f"❌ Error calculating real-time: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -3623,11 +3610,11 @@ def laporan():
             
             
             # Jurnal Penutup (Logic sederhana)
-            jurnal_penutup_data = get_jurnal_penutup_data() 
+            jurnal_penutup_data = [] 
             # (Logic generate jurnal penutup bisa ditambahkan jika fitur ini krusial ditampilkan realtime)
 
             # Neraca Saldo Penutupan
-            neraca_saldo_penutupan = get_neraca_saldo_setelah_penutupan()
+            neraca_saldo_penutupan = [] # (Logic neraca penutupan)
 
         except Exception as e:
             print(f"Error fetching data: {e}")
@@ -5096,6 +5083,8 @@ def laporan():
                     <div class="card-header">
                         <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
                         <div>
+                    </div>
+                    <div class="jurnal-container">
         """
         
         # Tampilkan data jurnal penutup
