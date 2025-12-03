@@ -6718,10 +6718,10 @@ def tambah_jurnal_pembelian():
         if save_journal_entries(tanggal, f"Pembelian {jenis_pembelian}", entries):
             print(f"✅ Purchase journal saved successfully")
             
-            # Jika pembelian ikan patin, update inventory
+             # Jika pembelian ikan patin, update inventory
             if jenis_pembelian == 'pembelian' and jenis_ikan and item_code:
                 # Record transaksi inventory
-                inventory_success = record_inventory_transaction(
+                record_inventory_transaction(
                     item_code, 
                     'PURCHASE', 
                     kuantitas, 
@@ -6730,23 +6730,15 @@ def tambah_jurnal_pembelian():
                     f"Pembelian {jenis_ikan} - {supplier}",
                     tanggal
                 )
-                if inventory_success:
-                    print(f"✅ Inventory updated for {item_code}: +{kuantitas} units")
-                else:
-                    print(f"⚠ Failed to update inventory for {item_code}")
+                print(f"✅ Inventory updated for {item_code}: +{kuantitas} units")
             
             return redirect("/laporan")
         else:
-            error_msg = "Gagal menyimpan jurnal! Pastikan jurnal balance."
-            print(f"❌ {error_msg}")
-            return f"<script>alert('{error_msg}'); window.history.back();</script>"
+            return "<script>alert('Error menyimpan jurnal!'); window.history.back();</script>"
         
     except Exception as e:
-        error_msg = f"Error menyimpan jurnal pembelian: {str(e)}"
-        print(f"❌ {error_msg}")
-        import traceback
-        traceback.print_exc()
-        return f"<script>alert('{error_msg}'); window.history.back();</script>"
+        print(f"Error adding purchase journal: {e}")
+        return "<script>alert('Error menyimpan jurnal!'); window.history.back();</script>"
     
 @app.route("/tambah_jurnal_biaya", methods=["POST"])
 def tambah_jurnal_biaya():
@@ -7120,7 +7112,7 @@ def tambah_stok():
         
         # Update inventory
         doc_no = f"PO-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-        success = update_inventory(jenis_ikan, 'IN', jumlah, harga_beli, tanggal, doc_no, "PURCHASE", keterangan)
+        success = update_inventory_stock(jenis_ikan, 'IN', jumlah, harga_beli, tanggal, doc_no, "PURCHASE", keterangan)
         
         if success:
             # Buat jurnal pembelian
