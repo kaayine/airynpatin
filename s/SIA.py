@@ -1466,21 +1466,18 @@ def get_neraca_lajur():
     
 # === Helper: Ambil data laporan laba rugi ===
 # === PERBAIKAN 1: FUNGSI HPP YANG BENAR ===
+# === PERBAIKAN FUNGSI get_laba_rugi_data() ===
 def get_laba_rugi_data():
-    """Ambil data untuk laporan laba rugi dengan perhitungan HPP yang benar"""
+    """Ambil data untuk laporan laba rugi dengan perhitungan yang benar"""
     try:
-        # GUNAKAN NERACA SETELAH PENYESUAIAN
         neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
         
-        print(f"🔍 LABA RUGI: Data NSSP entries: {len(neraca_setelah_penyesuaian)}")
-        
-        # Debug: tampilkan semua akun pendapatan dan beban
-        print("🔍 LABA RUGI: Akun Pendapatan dan Beban:")
+        # DEBUG: Tampilkan semua data
+        print("\n🔍 DEBUG LABA RUGI - NSSP DATA:")
         for item in neraca_setelah_penyesuaian:
-            if item['kode_akun'].startswith('4-') or item['kode_akun'].startswith('5-') or item['kode_akun'].startswith('6-'):
-                print(f"  {item['kode_akun']} - {item['nama_akun']}: Debit={item['debit']}, Kredit={item['kredit']}")
+            print(f"  {item['kode_akun']} - {item['nama_akun']}: Debit={item['debit']}, Kredit={item['kredit']}")
         
-        # Hitung komponen dari NSSP
+        # Hitung dari NERACA SALDO SETELAH PENYESUAIAN (bukan dari berbagai sumber)
         total_pendapatan = 0
         total_hpp = 0
         total_beban = 0
@@ -1488,60 +1485,36 @@ def get_laba_rugi_data():
         for item in neraca_setelah_penyesuaian:
             kode = item['kode_akun']
             
-            # PENDAPATAN (akun 4-xxx)
+            # PENDAPATAN (4-xxx) - normal balance Kredit
             if kode.startswith('4-'):
-                total_pendapatan += item['kredit']  # Pendapatan normal kredit
-                print(f"🔍 LABA RUGI: Pendapatan {kode}: +{item['kredit']}")
+                total_pendapatan += item['kredit']
+                print(f"🔍 Pendapatan {kode}: +{item['kredit']}")
             
-            # HPP (5-1000)
+            # HPP (5-1000) - normal balance Debit
             elif kode == '5-1000':
-                total_hpp += item['debit']  # HPP normal debit
-                print(f"🔍 LABA RUGI: HPP {kode}: +{item['debit']}")
+                total_hpp += item['debit']
+                print(f"🔍 HPP {kode}: +{item['debit']}")
             
-            # BEBAN OPERASIONAL (5-1100, 5-1200, 5-1300)
-            elif kode in ['5-1100', '5-1200', '5-1300']:
-                total_beban += item['debit']  # Beban normal debit
-                print(f"🔍 LABA RUGI: Beban {kode}: +{item['debit']}")
+            # BEBAN OPERASIONAL (5-1100, 5-1200) - normal balance Debit
+            elif kode in ['5-1100', '5-1200']:
+                total_beban += item['debit']
+                print(f"🔍 Beban {kode}: +{item['debit']}")
             
-            # BEBAN PENYESUAIAN (6-xxx)
+            # BEBAN PENYESUAIAN (6-xxx) - normal balance Debit
             elif kode.startswith('6-'):
-                total_beban += item['debit']  # Beban penyesuaian normal debit
-                print(f"🔍 LABA RUGI: Beban Penyesuaian {kode}: +{item['debit']}")
+                total_beban += item['debit']
+                print(f"🔍 Beban Penyesuaian {kode}: +{item['debit']}")
         
-        # Hitung laba kotor dan laba bersih
+        # Hitung laba
         laba_kotor = total_pendapatan - total_hpp
         laba_bersih = laba_kotor - total_beban
         
-        print(f"🔍 LABA RUGI: Total Pendapatan: {total_pendapatan}")
-        print(f"🔍 LABA RUGI: Total HPP: {total_hpp}")
-        print(f"🔍 LABA RUGI: Laba Kotor: {laba_kotor}")
-        print(f"🔍 LABA RUGI: Total Beban: {total_beban}")
-        print(f"🔍 LABA RUGI: Laba Bersih: {laba_bersih}")
-        
-        # Detail HPP (untuk display)
-        detail_hpp = {
-            'persediaan_awal': 0,
-            'persediaan_awal_8cm': 0,
-            'persediaan_awal_10cm': 0,
-            'pembelian': 0,
-            'pembelian_8cm': 0,
-            'pembelian_10cm': 0,
-            'beban_angkut_pembelian': 0,
-            'persediaan_akhir': 0,
-            'persediaan_akhir_8cm': 0,
-            'persediaan_akhir_10cm': 0
-        }
-        
-        # Ambil detail HPP dari NSSP jika ada
-        for item in neraca_setelah_penyesuaian:
-            if item['kode_akun'] == '1-1200':
-                detail_hpp['persediaan_akhir_8cm'] = item['debit'] if item['debit'] > 0 else item['kredit']
-            elif item['kode_akun'] == '1-1300':
-                detail_hpp['persediaan_akhir_10cm'] = item['debit'] if item['debit'] > 0 else item['kredit']
-            elif item['kode_akun'] == '5-1300':
-                detail_hpp['beban_angkut_pembelian'] = item['debit']  # Beban angkut pembelian
-        
-        detail_hpp['persediaan_akhir'] = detail_hpp['persediaan_akhir_8cm'] + detail_hpp['persediaan_akhir_10cm']
+        print(f"\n📊 LABA RUGI SUMMARY:")
+        print(f"  Total Pendapatan: Rp {total_pendapatan:,.0f}")
+        print(f"  Total HPP: Rp {total_hpp:,.0f}")
+        print(f"  Laba Kotor: Rp {laba_kotor:,.0f}")
+        print(f"  Total Beban: Rp {total_beban:,.0f}")
+        print(f"  Laba Bersih: Rp {laba_bersih:,.0f}")
         
         return {
             'total_pendapatan': total_pendapatan,
@@ -1549,11 +1522,11 @@ def get_laba_rugi_data():
             'laba_kotor': laba_kotor,
             'total_beban': total_beban,
             'laba_bersih': laba_bersih,
-            'detail_hpp': detail_hpp
+            'detail_hpp': {}  # Kosongkan detail sementara
         }
         
     except Exception as e:
-        print(f"❌ Error getting laba rugi data: {e}")
+        print(f"❌ Error in get_laba_rugi_data: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -1566,68 +1539,72 @@ def get_laba_rugi_data():
         }
     
 # === Helper: Ambil data neraca ===
+# === PERBAIKAN FUNGSI get_neraca_data() ===
 def get_neraca_data():
-    """Ambil data untuk neraca"""
+    """Ambil data untuk neraca dengan perhitungan yang benar"""
     try:
-        buku_besar_data = get_buku_besar_data()
+        neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
         
-        total_aset_lancar = 0
-        total_aset_tetap = 0
+        total_aset = 0
         total_liabilitas = 0
         total_ekuitas = 0
         
-        for kode_akun, data in buku_besar_data.items():
-            saldo = data['saldo_akhir']
+        print("\n🔍 DEBUG NERACA - PERHITUNGAN:")
+        
+        for item in neraca_setelah_penyesuaian:
+            kode = item['kode_akun']
+            saldo = item['debit'] - item['kredit']  # Net saldo
             
-            if data['kategori'] == 'Current Asset':
-                if data['tipe_akun'] == 'debit':
-                    total_aset_lancar += saldo
+            # ASET (1-xxx) - normal balance Debit
+            if kode.startswith('1-'):
+                if not kode.endswith(('2010', '2110', '2210')):  # Bukan akumulasi penyusutan
+                    total_aset += max(saldo, 0)
+                    print(f"🔍 Aset {kode}: +{max(saldo, 0):,.0f}")
+                else:  # Akumulasi penyusutan (kontra aset) - Kredit
+                    total_aset -= max(-saldo, 0)  # Kurangi dari aset
+                    print(f"🔍 Akumulasi Penyusutan {kode}: -{max(-saldo, 0):,.0f}")
+            
+            # LIABILITAS (2-xxx) - normal balance Kredit
+            elif kode.startswith('2-'):
+                total_liabilitas += max(-saldo, 0)
+                print(f"🔍 Liabilitas {kode}: +{max(-saldo, 0):,.0f}")
+            
+            # EKUITAS (3-xxx) - normal balance Kredit
+            elif kode.startswith('3-'):
+                if kode == '3-1200':  # Prive (kontra ekuitas) - Debit
+                    total_ekuitas -= max(saldo, 0)
+                    print(f"🔍 Prive {kode}: -{max(saldo, 0):,.0f}")
                 else:
-                    total_aset_lancar -= saldo
-            elif data['kategori'] == 'Fixed Asset':
-                if data['tipe_akun'] == 'debit':
-                    total_aset_tetap += saldo
-                else:
-                    total_aset_tetap -= saldo
-            elif data['kategori'] == 'Contra Asset':
-                if data['tipe_akun'] == 'debit':
-                    total_aset_tetap += saldo
-                else:
-                    total_aset_tetap -= saldo
-            elif data['kategori'] == 'Liabilities':
-                if data['tipe_akun'] == 'kredit':
-                    total_liabilitas += saldo
-                else:
-                    total_liabilitas -= saldo
-            elif data['kategori'] == 'Equity':
-                if data['tipe_akun'] == 'kredit':
-                    total_ekuitas += saldo
-                else:
-                    total_ekuitas -= saldo
-            elif data['kategori'] == 'Contra Equity':
-                if data['tipe_akun'] == 'kredit':
-                    total_ekuitas += saldo
-                else:
-                    total_ekuitas -= saldo
+                    total_ekuitas += max(-saldo, 0)
+                    print(f"🔍 Ekuitas {kode}: +{max(-saldo, 0):,.0f}")
         
         # Tambahkan laba bersih ke ekuitas
         laba_rugi_data = get_laba_rugi_data()
         total_ekuitas += laba_rugi_data['laba_bersih']
         
-        total_aset = total_aset_lancar + total_aset_tetap
+        print(f"\n📊 NERACA SUMMARY:")
+        print(f"  Total Aset: Rp {total_aset:,.0f}")
+        print(f"  Total Liabilitas: Rp {total_liabilitas:,.0f}")
+        print(f"  Total Ekuitas: Rp {total_ekuitas:,.0f}")
+        print(f"  Liabilitas + Ekuitas: Rp {total_liabilitas + total_ekuitas:,.0f}")
+        print(f"  Balance Check: {'✅ Balance' if abs(total_aset - (total_liabilitas + total_ekuitas)) < 0.01 else '❌ Tidak Balance'}")
         
         return {
-            'total_aset_lancar': total_aset_lancar,
-            'total_aset_tetap': total_aset_tetap,
             'total_aset': total_aset,
             'total_liabilitas': total_liabilitas,
             'total_ekuitas': total_ekuitas
         }
         
     except Exception as e:
-        print(f"Error getting neraca data: {e}")
-        return {'total_aset_lancar': 0, 'total_aset_tetap': 0, 'total_aset': 0, 'total_liabilitas': 0, 'total_ekuitas': 0}
-
+        print(f"❌ Error in get_neraca_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            'total_aset': 0,
+            'total_liabilitas': 0,
+            'total_ekuitas': 0
+        }
+    
 # === Helper: Update inventory stock ===
 def update_inventory_stock(item_code, transaction_type, quantity):
     """Update stok inventory berdasarkan transaksi - HANYA UNIT"""
