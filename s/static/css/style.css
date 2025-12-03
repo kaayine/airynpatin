@@ -1,0 +1,187 @@
+body {
+  margin: 0;
+  font-family: 'Poppins', sans-serif;
+  display: flex;
+  height: 100vh;
+  background: linear-gradient(to right, #7F00FF, #00C6FF);
+}
+
+.sidebar {
+  width: 240px;
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  border-right: 2px solid rgba(255,255,255,0.2);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  color: white;
+}
+
+.sidebar .logo {
+  text-align: center;
+  margin-bottom: 40px;
+}
+
+.sidebar .logo img {
+  width: 80px;
+  border-radius: 50%;
+  margin-bottom: 10px;
+}
+.logo .desc {
+  font-size: 13px;
+  color: #ddd;
+  text-align: center;
+  margin-top: -5px;
+  font-weight: 400;
+  opacity: 0.9;
+}
+
+.sidebar ul {
+  list-style: none;
+  padding: 0;
+}
+
+.sidebar ul li {
+  margin: 15px 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+}
+
+.sidebar ul li a {
+  color: white;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.sidebar ul li:hover a {
+  text-decoration: underline;
+}
+
+.main {
+  flex: 1;
+  padding: 30px;
+  color: white;
+}
+
+header {
+  font-size: 24px;
+  font-weight: 600;
+  margin-bottom: 20px;
+}
+
+.content {
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(12px);
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+}
+
+.cards {
+  display: flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.card {
+  flex: 1;
+  min-width: 180px;
+  background: rgba(255,255,255,0.2);
+  border-radius: 15px;
+  padding: 20px;
+  text-align: center;
+  font-weight: 500;
+}
+
+/* === BERANDA STYLE (sesuai tema Airyn) === */
+
+.beranda-container {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, rgba(106, 17, 203, 0.15), rgba(37, 117, 252, 0.15));
+  border-radius: 20px;
+  padding: 40px;
+  box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+  backdrop-filter: blur(12px);
+  color: #fff;
+  gap: 40px;
+}
+
+.image-section {
+  flex: 1.2;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.hero-image {
+  width: 100%;
+  height: auto;
+  border-radius: 20px;
+  object-fit: cover;
+  box-shadow: 0 8px 20px rgba(0,0,0,0.25);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.hero-image:hover {
+  transform: scale(1.03);
+  box-shadow: 0 12px 30px rgba(0,0,0,0.3);
+}
+
+.text-section {
+  flex: 0.8;
+  text-align: left;
+}
+
+.text-section h2 {
+  font-size: 2.2rem;
+  background: linear-gradient(90deg, #a0c4ff, #b388eb);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  margin-bottom: 15px;
+  font-weight: 700;
+}
+
+.text-section p {
+  color: #e6e6e6;
+  font-weight: 300;
+  line-height: 1.7;
+  max-width: 450px;
+}
+
+/* Responsif */
+@media (max-width: 900px) {
+  .beranda-container {
+    flex-direction: column;
+    text-align: center;
+    gap: 20px;
+  }
+
+  .image-section, .text-section {
+    flex: unset;
+    width: 100%;
+  }
+
+  .text-section h2 {
+    font-size: 1.8rem;
+  }
+}
+/* Container utama */
+.kasir-container {
+  background: linear-gradient(135deg, #5a00e0, #00aaff);
+  min-height: 100vh;
+  padding: 40px;
+  color: white;
+  font-family: 'Poppins', sans-serif;
+}
+
+.kasir-container h2 {
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+
