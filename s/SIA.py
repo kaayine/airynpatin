@@ -6073,91 +6073,161 @@ function hitungTotalPembelian() {
     document.getElementById('total_pembelian').textContent = 'Rp ' + total.toLocaleString('id-ID');
 }
 
-// Fungsi untuk load saldo aset
+// Fungsi untuk load saldo aset - VERSI DIPERBAIKI
 function loadSaldoAset() {
+    console.log("🔧 loadSaldoAset() dipanggil");
+    
+    // Set default value dulu
+    document.getElementById('saldo_kendaraan').textContent = 'Loading...';
+    document.getElementById('saldo_bangunan').textContent = 'Loading...';
+    document.getElementById('saldo_peralatan').textContent = 'Loading...';
+    
     fetch('/get_saldo_aset')
-        .then(response => response.json())
+        .then(response => {
+            if (!response.ok) {
+                throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+        })
         .then(data => {
+            console.log("📊 Data saldo aset:", data);
+            
             if (data.success) {
                 document.getElementById('saldo_kendaraan').textContent = 'Rp ' + data.saldo_kendaraan.toLocaleString('id-ID');
                 document.getElementById('saldo_bangunan').textContent = 'Rp ' + data.saldo_bangunan.toLocaleString('id-ID');
                 document.getElementById('saldo_peralatan').textContent = 'Rp ' + data.saldo_peralatan.toLocaleString('id-ID');
                 
                 // Trigger perhitungan awal
-                hitungPenyusutan();
+                setTimeout(hitungPenyusutan, 500);
+            } else {
+                console.error("❌ API returned success=false");
+                document.getElementById('saldo_kendaraan').textContent = 'Error loading';
+                document.getElementById('saldo_bangunan').textContent = 'Error loading';
+                document.getElementById('saldo_peralatan').textContent = 'Error loading';
             }
         })
         .catch(error => {
-            console.error('Error loading saldo aset:', error);
-            document.getElementById('saldo_kendaraan').textContent = 'Error loading';
-            document.getElementById('saldo_bangunan').textContent = 'Error loading';
-            document.getElementById('saldo_peralatan').textContent = 'Error loading';
+            console.error('❌ Error loading saldo aset:', error);
+            document.getElementById('saldo_kendaraan').textContent = 'Connection error';
+            document.getElementById('saldo_bangunan').textContent = 'Connection error';
+            document.getElementById('saldo_peralatan').textContent = 'Connection error';
         });
 }
 
-// Fungsi untuk hitung penyusutan
+// Fungsi untuk hitung penyusutan - VERSI DIPERBAIKI
 function hitungPenyusutan() {
-    // Ambil saldo aset
-    const saldoBangunan = parseFloat(document.getElementById('saldo_bangunan').textContent.replace('Rp ', '').replace(/\\./g, '')) || 0;
-    const saldoPeralatan = parseFloat(document.getElementById('saldo_peralatan').textContent.replace('Rp ', '').replace(/\\./g, '')) || 0;
+    console.log("🔧 hitungPenyusutan() dipanggil");
     
-    // Kendaraan
-    const residuKendaraan = parseFloat(document.querySelector('input[name="nilai_residu_kendaraan"]').value) || 0;
-    const ekonomisKendaraan = parseFloat(document.querySelector('input[name="nilai_ekonomis_kendaraan"]').value) || 1;
-    
-    if (saldoKendaraan > 0 && ekonomisKendaraan > 0) {
-        const penyusutanKendaraan = (saldoKendaraan - residuKendaraan) / ekonomisKendaraan;
-        document.getElementById('nilai_penyusutan_kendaraan').textContent = 'Rp ' + penyusutanKendaraan.toLocaleString('id-ID');
-        document.getElementById('hasil_penyusutan_kendaraan').style.display = 'block';
-        document.getElementById('total_penyusutan_kendaraan').textContent = 'Rp ' + penyusutanKendaraan.toLocaleString('id-ID');
-    } else {
-        document.getElementById('hasil_penyusutan_kendaraan').style.display = 'none';
+    try {
+        // Ambil saldo aset dari elemen yang sudah di-load
+        const saldoKendaraanText = document.getElementById('saldo_kendaraan').textContent;
+        const saldoBangunanText = document.getElementById('saldo_bangunan').textContent;
+        const saldoPeralatanText = document.getElementById('saldo_peralatan').textContent;
+        
+        // Helper function untuk parse nilai dari string "Rp 1.000.000"
+        function parseRupiah(rupiahText) {
+            if (rupiahText.includes('Error') || rupiahText.includes('Loading')) {
+                return 0;
+            }
+            // Hapus "Rp ", titik, dan spasi, lalu konversi ke number
+            const cleaned = rupiahText.replace('Rp ', '').replace(/\./g, '').replace(',', '.');
+            const parsed = parseFloat(cleaned);
+            return isNaN(parsed) ? 0 : parsed;
+        }
+        
+        const saldoKendaraan = parseRupiah(saldoKendaraanText);
+        const saldoBangunan = parseRupiah(saldoBangunanText);
+        const saldoPeralatan = parseRupiah(saldoPeralatanText);
+        
+        console.log(`🔍 Saldo parsed: Kendaraan=${saldoKendaraan}, Bangunan=${saldoBangunan}, Peralatan=${saldoPeralatan}`);
+        
+        // KENDARAAN
+        const residuKendaraan = parseFloat(document.querySelector('input[name="nilai_residu_kendaraan"]').value) || 0;
+        const ekonomisKendaraan = parseFloat(document.querySelector('input[name="nilai_ekonomis_kendaraan"]').value) || 1;
+        
+        let penyusutanKendaraan = 0;
+        if (saldoKendaraan > 0 && ekonomisKendaraan > 0) {
+            penyusutanKendaraan = (saldoKendaraan - residuKendaraan) / ekonomisKendaraan;
+            document.getElementById('nilai_penyusutan_kendaraan').textContent = 'Rp ' + penyusutanKendaraan.toLocaleString('id-ID');
+            document.getElementById('hasil_penyusutan_kendaraan').style.display = 'block';
+            document.getElementById('total_penyusutan_kendaraan').textContent = 'Rp ' + penyusutanKendaraan.toLocaleString('id-ID');
+        } else {
+            document.getElementById('hasil_penyusutan_kendaraan').style.display = 'none';
+            document.getElementById('total_penyusutan_kendaraan').textContent = 'Rp 0';
+        }
+        
+        // BANGUNAN
+        const residuBangunan = parseFloat(document.querySelector('input[name="nilai_residu_bangunan"]').value) || 0;
+        const ekonomisBangunan = parseFloat(document.querySelector('input[name="nilai_ekonomis_bangunan"]').value) || 1;
+        
+        let penyusutanBangunan = 0;
+        if (saldoBangunan > 0 && ekonomisBangunan > 0) {
+            penyusutanBangunan = (saldoBangunan - residuBangunan) / ekonomisBangunan;
+            document.getElementById('nilai_penyusutan_bangunan').textContent = 'Rp ' + penyusutanBangunan.toLocaleString('id-ID');
+            document.getElementById('hasil_penyusutan_bangunan').style.display = 'block';
+            document.getElementById('total_penyusutan_bangunan').textContent = 'Rp ' + penyusutanBangunan.toLocaleString('id-ID');
+        } else {
+            document.getElementById('hasil_penyusutan_bangunan').style.display = 'none';
+            document.getElementById('total_penyusutan_bangunan').textContent = 'Rp 0';
+        }
+        
+        // PERALATAN
+        const residuPeralatan = parseFloat(document.querySelector('input[name="nilai_residu_peralatan"]').value) || 0;
+        const ekonomisPeralatan = parseFloat(document.querySelector('input[name="nilai_ekonomis_peralatan"]').value) || 1;
+        
+        let penyusutanPeralatan = 0;
+        if (saldoPeralatan > 0 && ekonomisPeralatan > 0) {
+            penyusutanPeralatan = (saldoPeralatan - residuPeralatan) / ekonomisPeralatan;
+            document.getElementById('nilai_penyusutan_peralatan').textContent = 'Rp ' + penyusutanPeralatan.toLocaleString('id-ID');
+            document.getElementById('hasil_penyusutan_peralatan').style.display = 'block';
+            document.getElementById('total_penyusutan_peralatan').textContent = 'Rp ' + penyusutanPeralatan.toLocaleString('id-ID');
+        } else {
+            document.getElementById('hasil_penyusutan_peralatan').style.display = 'none';
+            document.getElementById('total_penyusutan_peralatan').textContent = 'Rp 0';
+        }
+        
+        // Total seluruh penyusutan
+        const totalSeluruh = penyusutanKendaraan + penyusutanBangunan + penyusutanPeralatan;
+        
+        document.getElementById('total_seluruh_penyusutan').textContent = 'Rp ' + totalSeluruh.toLocaleString('id-ID');
+        
+        // Tampilkan ringkasan jika ada penyusutan
+        if (totalSeluruh > 0) {
+            document.getElementById('ringkasan_penyusutan').style.display = 'block';
+        } else {
+            document.getElementById('ringkasan_penyusutan').style.display = 'none';
+        }
+        
+        console.log(`✅ Perhitungan selesai: Total penyusutan = Rp ${totalSeluruh.toLocaleString('id-ID')}`);
+        
+    } catch (error) {
+        console.error('❌ Error in hitungPenyusutan:', error);
+        // Tetap tampilkan ringkasan dengan nilai 0
         document.getElementById('total_penyusutan_kendaraan').textContent = 'Rp 0';
-    }
-    
-    // Bangunan
-    const residuBangunan = parseFloat(document.querySelector('input[name="nilai_residu_bangunan"]').value) || 0;
-    const ekonomisBangunan = parseFloat(document.querySelector('input[name="nilai_ekonomis_bangunan"]').value) || 1;
-    
-    if (saldoBangunan > 0 && ekonomisBangunan > 0) {
-        const penyusutanBangunan = (saldoBangunan - residuBangunan) / ekonomisBangunan;
-        document.getElementById('nilai_penyusutan_bangunan').textContent = 'Rp ' + penyusutanBangunan.toLocaleString('id-ID');
-        document.getElementById('hasil_penyusutan_bangunan').style.display = 'block';
-        document.getElementById('total_penyusutan_bangunan').textContent = 'Rp ' + penyusutanBangunan.toLocaleString('id-ID');
-    } else {
-        document.getElementById('hasil_penyusutan_bangunan').style.display = 'none';
         document.getElementById('total_penyusutan_bangunan').textContent = 'Rp 0';
-    }
-    
-    // Peralatan
-    const residuPeralatan = parseFloat(document.querySelector('input[name="nilai_residu_peralatan"]').value) || 0;
-    const ekonomisPeralatan = parseFloat(document.querySelector('input[name="nilai_ekonomis_peralatan"]').value) || 1;
-    
-    if (saldoPeralatan > 0 && ekonomisPeralatan > 0) {
-        const penyusutanPeralatan = (saldoPeralatan - residuPeralatan) / ekonomisPeralatan;
-        document.getElementById('nilai_penyusutan_peralatan').textContent = 'Rp ' + penyusutanPeralatan.toLocaleString('id-ID');
-        document.getElementById('hasil_penyusutan_peralatan').style.display = 'block';
-        document.getElementById('total_penyusutan_peralatan').textContent = 'Rp ' + penyusutanPeralatan.toLocaleString('id-ID');
-    } else {
-        document.getElementById('hasil_penyusutan_peralatan').style.display = 'none';
         document.getElementById('total_penyusutan_peralatan').textContent = 'Rp 0';
-    }
-    
-    // Total seluruh penyusutan
-    const totalKendaraan = parseFloat(document.getElementById('total_penyusutan_kendaraan').textContent.replace('Rp ', '').replace(/\\./g, '')) || 0;
-    const totalBangunan = parseFloat(document.getElementById('total_penyusutan_bangunan').textContent.replace('Rp ', '').replace(/\\./g, '')) || 0;
-    const totalPeralatan = parseFloat(document.getElementById('total_penyusutan_peralatan').textContent.replace('Rp ', '').replace(/\\./g, '')) || 0;
-    const totalSeluruh = totalKendaraan + totalBangunan + totalPeralatan;
-    
-    document.getElementById('total_seluruh_penyusutan').textContent = 'Rp ' + totalSeluruh.toLocaleString('id-ID');
-    
-    // Tampilkan ringkasan jika ada penyusutan
-    if (totalSeluruh > 0) {
-        document.getElementById('ringkasan_penyusutan').style.display = 'block';
-    } else {
-        document.getElementById('ringkasan_penyusutan').style.display = 'none';
+        document.getElementById('total_seluruh_penyusutan').textContent = 'Rp 0';
     }
 }
+
+document.addEventListener('DOMContentLoaded', function() {
+    console.log("✅ JavaScript loaded successfully");
+    
+    // Load saldo aset saat modal dibuka
+    document.querySelectorAll('input[name^="nilai_residu"], input[name^="nilai_ekonomis"]').forEach(input => {
+        input.addEventListener('input', hitungPenyusutan);
+        input.addEventListener('change', hitungPenyusutan);
+    });
+    
+    // Load saldo aset saat modal dibuka
+    const modal = document.getElementById('tambah-jurnal-penyesuaian');
+    if (modal) {
+        modal.addEventListener('shown', function() {
+            console.log("Modal penyesuaian dibuka, loading saldo aset...");
+            loadSaldoAset();
+        });
+    }
+});
 
 // Pastikan event listeners terpasang
 document.addEventListener('DOMContentLoaded', function() {
@@ -6503,25 +6573,49 @@ def get_saldo_aset():
         return jsonify({"success": False})
     
     try:
-        # Ambil saldo aset tetap
-        accounts_res = supabase.table("accounts").select("kode_akun, saldo_awal").in_("kode_akun", ['1-2000', '1-2200', '1-2100']).execute()
-        accounts_data = accounts_res.data if accounts_res.data else []
+        print("🔍 get_saldo_aset() dipanggil")
         
-        # Buat dictionary untuk memudahkan akses
-        saldo_aset = {}
-        for acc in accounts_data:
-            saldo_aset[acc['kode_akun']] = acc['saldo_awal']
+        # Ambil neraca saldo saat ini
+        neraca_saldo_data = get_neraca_saldo_data()
+        print(f"📊 Data neraca saldo: {len(neraca_saldo_data)} entries")
+        
+        # Debug: print semua akun aset
+        for item in neraca_saldo_data:
+            if '1-2' in item['kode_akun']:  # Semua akun aset tetap
+                print(f"🔍 Akun {item['kode_akun']}: Debit={item['debit']}, Kredit={item['kredit']}")
+        
+        # Cari saldo aset tetap di neraca saldo
+        saldo_kendaraan = 0
+        saldo_bangunan = 0
+        saldo_peralatan = 0
+        
+        for item in neraca_saldo_data:
+            if item['kode_akun'] == '1-2000':  # Kendaraan
+                saldo_kendaraan = item['debit'] if item['debit'] > 0 else item['kredit']
+            elif item['kode_akun'] == '1-2200':  # Bangunan
+                saldo_bangunan = item['debit'] if item['debit'] > 0 else item['kredit']
+            elif item['kode_akun'] == '1-2100':  # Peralatan
+                saldo_peralatan = item['debit'] if item['debit'] > 0 else item['kredit']
+        
+        print(f"✅ Saldo ditemukan: Kendaraan={saldo_kendaraan}, Bangunan={saldo_bangunan}, Peralatan={saldo_peralatan}")
         
         return jsonify({
             "success": True,
-            "saldo_kendaraan": saldo_aset.get('1-2000', 0),
-            "saldo_bangunan": saldo_aset.get('1-2200', 0),
-            "saldo_peralatan": saldo_aset.get('1-2100', 0)
+            "saldo_kendaraan": float(saldo_kendaraan),
+            "saldo_bangunan": float(saldo_bangunan),
+            "saldo_peralatan": float(saldo_peralatan)
         })
         
     except Exception as e:
-        print(f"Error getting saldo aset: {e}")
-        return jsonify({"success": False})
+        print(f"❌ Error in get_saldo_aset: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            "success": False,
+            "saldo_kendaraan": 0,
+            "saldo_bangunan": 0,
+            "saldo_peralatan": 0
+        })
 
 @app.route("/tambah_jurnal_penyesuaian", methods=["POST"])
 def tambah_jurnal_penyesuaian():
