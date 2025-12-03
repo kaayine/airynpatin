@@ -3464,19 +3464,6 @@ def laporan():
             # kita gunakan data yang sudah dihitung sebelumnya
             neraca_lajur_data = [] # Bisa diisi logika mapping jika diperlukan, tapi opsional untuk performa
             
-            kas_masuk = sum(j['debit'] for j in jurnal_data if j['kode_akun'] == '1-1000')
-            kas_keluar = sum(j['kredit'] for j in jurnal_data if j['kode_akun'] == '1-1000')
-            saldo_kas_awal = next((a['saldo_awal'] for a in accounts if a['kode_akun'] == '1-1000'), 0)
-            
-            arus_kas_data = {
-                'kas_diterima_pelanggan': kas_masuk, # Penyederhanaan
-                'total_kas_keluar_operasi': kas_keluar,
-                'kas_bersih_operasi': kas_masuk - kas_keluar,
-                'saldo_kas_awal': saldo_kas_awal,
-                'saldo_kas_akhir': saldo_kas_awal + (kas_masuk - kas_keluar),
-                'kas_keluar_pembelian': 0, 'kas_keluar_beban': 0, 
-                'kas_keluar_perlengkapan': 0, 'kas_keluar_lainnya': 0
-            }
             
             # Jurnal Penutup (Logic sederhana)
             jurnal_penutup_data = [] 
