@@ -721,109 +721,6 @@ def get_laporan_perubahan_modal():
             'modal_akhir': 0
         }
 
-# === Helper: Ambil data laporan arus kas metode langsung ===
-def get_laporan_arus_kas():
-    """Ambil data untuk laporan arus kas metode langsung - TERINTEGRASI OTOMATIS"""
-    try:
-        # Ambil semua transaksi jurnal umum
-        jurnal_res = supabase.table("jurnal_umum").select("*").order("tanggal").execute()
-        jurnal_data = jurnal_res.data if jurnal_res.data else []
-        
-        # Ambil data buku pembantu piutang untuk pelunasan
-        piutang_res = supabase.table("buku_pembantu_piutang").select("*").execute()
-        piutang_data = piutang_res.data if piutang_res.data else []
-        
-        # Ambil data penjualan untuk analisis penerimaan kas
-        sales_res = supabase.table("sales").select("*").execute()
-        sales_data = sales_res.data if sales_res.data else []
-        
-        # ==================== KAS DITERIMA DARI PELANGGAN ====================
-        kas_diterima_pelanggan = 0
-        
-        # 1. Dari penjualan tunai langsung (lunas)
-        for sale in sales_data:
-            if sale['payment_method'] == 'lunas':
-                kas_diterima_pelanggan += sale['total_amount']
-        
-        # 2. Dari pelunasan piutang (transaksi kredit di buku pembantu piutang)
-        for piutang in piutang_data:
-            if piutang['kredit'] > 0:  # Pelunasan piutang
-                kas_diterima_pelanggan += piutang['kredit']
-        
-        # ==================== KAS KELUAR AKTIVITAS OPERASI ====================
-        kas_keluar_pembelian = 0
-        kas_keluar_beban = 0
-        kas_keluar_perlengkapan = 0
-        kas_keluar_lainnya = 0
-        
-        for jurnal in jurnal_data:
-            # Kas keluar untuk pembelian (kredit ke kas, debit ke persediaan/aset)
-            if jurnal['kode_akun'] in ['1-1200', '1-1300', '1-1400', '1-2100'] and jurnal['debit'] > 0:
-                # Cari entry kredit kas yang sesuai
-                for jurnal_kas in jurnal_data:
-                    if (jurnal_kas['nomor_jurnal'] == jurnal['nomor_jurnal'] and 
-                        jurnal_kas['kode_akun'] == '1-1000' and 
-                        jurnal_kas['kredit'] > 0):
-                        
-                        if jurnal['kode_akun'] in ['1-1200', '1-1300']:  # Persediaan ikan
-                            kas_keluar_pembelian += jurnal_kas['kredit']
-                        elif jurnal['kode_akun'] == '1-1400':  # Perlengkapan
-                            kas_keluar_perlengkapan += jurnal_kas['kredit']
-                        elif jurnal['kode_akun'] == '1-2100':  # Peralatan
-                            kas_keluar_pembelian += jurnal_kas['kredit']
-            
-            # Kas keluar untuk beban operasional
-            elif jurnal['kode_akun'] in ['5-1100', '5-1200', '5-1300'] and jurnal['debit'] > 0:
-                # Cari entry kredit kas yang sesuai
-                for jurnal_kas in jurnal_data:
-                    if (jurnal_kas['nomor_jurnal'] == jurnal['nomor_jurnal'] and 
-                        jurnal_kas['kode_akun'] == '1-1000' and 
-                        jurnal_kas['kredit'] > 0):
-                        kas_keluar_beban += jurnal_kas['kredit']
-        
-        total_kas_keluar_operasi = kas_keluar_pembelian + kas_keluar_beban + kas_keluar_perlengkapan + kas_keluar_lainnya
-        
-        # ==================== KAS BERSIH OPERASI ====================
-        kas_bersih_operasi = kas_diterima_pelanggan - total_kas_keluar_operasi
-        
-        # ==================== SALDO KAS ====================
-        # Ambil saldo awal kas dari akun
-        kas_res = supabase.table("accounts").select("saldo_awal").eq("kode_akun", "1-1000").execute()
-        saldo_kas_awal = kas_res.data[0]['saldo_awal'] if kas_res.data else 0
-        
-        # Hitung saldo kas akhir
-        saldo_kas_akhir = saldo_kas_awal + kas_bersih_operasi
-        
-        return {
-            'kas_diterima_pelanggan': kas_diterima_pelanggan,
-            'kas_keluar_pembelian': kas_keluar_pembelian,
-            'kas_keluar_beban': kas_keluar_beban,
-            'kas_keluar_perlengkapan': kas_keluar_perlengkapan,
-            'kas_keluar_lainnya': kas_keluar_lainnya,
-            'total_kas_keluar_operasi': total_kas_keluar_operasi,
-            'kas_bersih_operasi': kas_bersih_operasi,
-            'saldo_kas_awal': saldo_kas_awal,
-            'saldo_kas_akhir': saldo_kas_akhir,
-            'kas_investasi': 0,  # Bisa dikembangkan
-            'kas_pendanaan': 0   # Bisa dikembangkan
-        }
-        
-    except Exception as e:
-        print(f"Error getting laporan arus kas: {e}")
-        return {
-            'kas_diterima_pelanggan': 0,
-            'kas_keluar_pembelian': 0,
-            'kas_keluar_beban': 0,
-            'kas_keluar_perlengkapan': 0,
-            'kas_keluar_lainnya': 0,
-            'total_kas_keluar_operasi': 0,
-            'kas_bersih_operasi': 0,
-            'saldo_kas_awal': 0,
-            'saldo_kas_akhir': 0,
-            'kas_investasi': 0,
-            'kas_pendanaan': 0
-        }
-    
 # === Helper: Get jurnal penutup ===
 def get_jurnal_penutup_data():
     """Generate jurnal penutup berdasarkan struktur yang benar"""
@@ -3567,12 +3464,6 @@ def laporan():
             # kita gunakan data yang sudah dihitung sebelumnya
             neraca_lajur_data = [] # Bisa diisi logika mapping jika diperlukan, tapi opsional untuk performa
             
-            # Arus Kas (Sederhana)
-            # Gunakan fungsi yang ada tapi pastikan dia tidak fetch ulang jika memungkinkan
-            # Karena get_laporan_arus_kas di kode asli melakukan fetch sendiri, 
-            # untuk performa maksimal sebaiknya kodenya dipindah kesini juga.
-            # Tapi untuk sekarang kita biarkan return 0 atau hitung manual kas
-            
             kas_masuk = sum(j['debit'] for j in jurnal_data if j['kode_akun'] == '1-1000')
             kas_keluar = sum(j['kredit'] for j in jurnal_data if j['kode_akun'] == '1-1000')
             saldo_kas_awal = next((a['saldo_awal'] for a in accounts if a['kode_akun'] == '1-1000'), 0)
@@ -4200,7 +4091,6 @@ def laporan():
                 <button class="tab-btn" onclick="openTab('neraca-lajur')">Neraca Lajur</button>
                 <button class="tab-btn" onclick="openTab('laporan-keuangan')">Laporan Keuangan</button>
                 <button class="tab-btn" onclick="openTab('laporan-perubahan-modal')">Laporan Perubahan Modal</button>
-                <button class="tab-btn" onclick="openTab('laporan-arus-kas')">Laporan Arus Kas</button>
                 <button class="tab-btn" onclick="openTab('jurnal-penutup')">Jurnal Penutup</button>
                 <button class="tab-btn" onclick="openTab('neraca-saldo-penutupan')">Neraca Saldo Setelah Penutupan</button>
             </div>
@@ -5055,59 +4945,6 @@ def laporan():
                     </div>
                 </div>
             </div>
-            
-            <!-- TAB 11: LAPORAN ARUS KAS -->
-<div id="laporan-arus-kas" class="tab-content">
-    <div class="card">
-        <div class="card-header">
-            <h2 class="card-title">Laporan Arus Kas - Toko Ikan Patin</h2>
-            <p style="color: #64748b; margin: 0;">Metode Langsung - Periode: ''' + date.today().strftime("%d %B %Y") + '''</p>
-        </div>
-        
-        <div class="laporan-keuangan-container">
-            <div class="laporan-section">
-                <div class="laporan-header">
-                    <h3 style="margin: 0; color: white;">LAPORAN ARUS KAS</h3>
-                    <p style="margin: 0.5rem 0 0 0; color: #e0e7ff;">Metode Langsung - Periode Berjalan</p>
-                </div>
-                <div class="laporan-body">
-                    <div style="background: #f0f9ff; padding: 1rem; border-radius: 8px; margin-bottom: 1rem;">
-                        <h4 style="color: #0369a1; margin-bottom: 1rem;">AKTIVITAS OPERASI</h4>
-                        <div class="laporan-row">
-                            <span>Kas diterima dari pelanggan:</span>
-                            <span class="laporan-positive">Rp ''' + f"{arus_kas_data.get('kas_diterima_pelanggan', 0):,.0f}" + '''</span>
-                        </div>
-                        <div class="laporan-row">
-                            <span>Kas keluar untuk pembelian:</span>
-                            <span class="laporan-negative">(Rp ''' + f"{arus_kas_data.get('kas_keluar_pembelian', 0):,.0f}" + ''')</span>
-                        </div>
-                        <div class="laporan-row">
-                            <span>Kas keluar untuk beban:</span>
-                            <span class="laporan-negative">(Rp ''' + f"{arus_kas_data.get('kas_keluar_beban', 0):,.0f}" + ''')</span>
-                        </div>
-                        <div class="laporan-row laporan-total">
-                            <span><strong>Kas Bersih dari Aktivitas Operasi:</strong></span>
-                            <span class="''' + ("laporan-positive" if arus_kas_data.get('kas_bersih_operasi', 0) >= 0 else "laporan-negative") + '''">
-                                <strong>Rp ''' + f"{abs(arus_kas_data.get('kas_bersih_operasi', 0)):,.0f}" + '''</strong>
-                            </span>
-                        </div>
-                    </div>
-                    
-                    <!-- Aktivitas Investasi dan Pendanaan bisa ditambahkan nanti -->
-                    
-                    <div class="laporan-row">
-                        <span>Saldo Kas Awal:</span>
-                        <span>Rp ''' + f"{arus_kas_data.get('saldo_kas_awal', 0):,.0f}" + '''</span>
-                    </div>
-                    <div class="laporan-row laporan-total laporan-positive">
-                        <span><strong>Saldo Kas Akhir:</strong></span>
-                        <span><strong>Rp ''' + f"{arus_kas_data.get('saldo_kas_akhir', 0):,.0f}" + '''</strong></span>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
 
             <!-- TAB BARU: JURNAL PENUTUP -->
             <div id="jurnal-penutup" class="tab-content">
