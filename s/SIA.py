@@ -1338,25 +1338,31 @@ def get_jurnal_penyesuaian():
         return []
 
 # === Helper: Ambil data neraca lajur ===
+# === Helper: Ambil data neraca lajur ===
 def get_neraca_lajur():
-    """Ambil data untuk neraca lajur (worksheet)"""
+    """Ambil data untuk neraca lajur (worksheet) - VERSI DIPERBAIKI"""
     try:
         # Ambil neraca saldo sebelum penyesuaian
         neraca_saldo = get_neraca_saldo_data()
         
-        # Ambil data jurnal penyesuaian
+        # Ambil data jurnal penyesuaian langsung
         jurnal_penyesuaian = get_jurnal_penyesuaian()
         
         # Ambil neraca saldo setelah penyesuaian
         neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
         
-        # Buat dictionary untuk memudahkan pencarian
-        neraca_lajur = {}
+        print(f"🔍 DEBUG Neraca Lajur:")
+        print(f"🔍 Neraca Saldo entries: {len(neraca_saldo)}")
+        print(f"🔍 Jurnal Penyesuaian entries: {len(jurnal_penyesuaian)}")
+        print(f"🔍 NSSP entries: {len(neraca_setelah_penyesuaian)}")
         
-        # Proses neraca saldo
+        # Buat dictionary untuk memudahkan pencarian
+        neraca_lajur_dict = {}
+        
+        # 1. Proses neraca saldo
         for item in neraca_saldo:
             kode_akun = item['kode_akun']
-            neraca_lajur[kode_akun] = {
+            neraca_lajur_dict[kode_akun] = {
                 'kode_akun': kode_akun,
                 'nama_akun': item['nama_akun'],
                 'neraca_saldo_debit': item['debit'],
@@ -1371,61 +1377,59 @@ def get_neraca_lajur():
                 'neraca_kredit': 0
             }
         
-        # Proses jurnal penyesuaian
+        # 2. Proses jurnal penyesuaian
         for jurnal in jurnal_penyesuaian:
             kode_akun = jurnal['kode_akun']
             
-            if kode_akun not in neraca_lajur:
+            if kode_akun not in neraca_lajur_dict:
                 # Jika akun belum ada, tambahkan
-                accounts_res = supabase.table("accounts").select("*").eq("kode_akun", kode_akun).execute()
-                if accounts_res.data:
-                    akun = accounts_res.data[0]
-                    neraca_lajur[kode_akun] = {
-                        'kode_akun': kode_akun,
-                        'nama_akun': akun['nama_akun'],
-                        'neraca_saldo_debit': 0,
-                        'neraca_saldo_kredit': 0,
-                        'penyesuaian_debit': 0,
-                        'penyesuaian_kredit': 0,
-                        'neraca_saldo_setelah_penyesuaian_debit': 0,
-                        'neraca_saldo_setelah_penyesuaian_kredit': 0,
-                        'laba_rugi_debit': 0,
-                        'laba_rugi_kredit': 0,
-                        'neraca_debit': 0,
-                        'neraca_kredit': 0
-                    }
+                accounts_res = supabase.table("accounts").select("nama_akun").eq("kode_akun", kode_akun).execute()
+                nama_akun = accounts_res.data[0]['nama_akun'] if accounts_res.data else kode_akun
+                
+                neraca_lajur_dict[kode_akun] = {
+                    'kode_akun': kode_akun,
+                    'nama_akun': nama_akun,
+                    'neraca_saldo_debit': 0,
+                    'neraca_saldo_kredit': 0,
+                    'penyesuaian_debit': 0,
+                    'penyesuaian_kredit': 0,
+                    'neraca_saldo_setelah_penyesuaian_debit': 0,
+                    'neraca_saldo_setelah_penyesuaian_kredit': 0,
+                    'laba_rugi_debit': 0,
+                    'laba_rugi_kredit': 0,
+                    'neraca_debit': 0,
+                    'neraca_kredit': 0
+                }
             
             # Tambahkan penyesuaian
-            if jurnal['debit'] > 0:
-                neraca_lajur[kode_akun]['penyesuaian_debit'] += jurnal['debit']
-            if jurnal['kredit'] > 0:
-                neraca_lajur[kode_akun]['penyesuaian_kredit'] += jurnal['kredit']
+            neraca_lajur_dict[kode_akun]['penyesuaian_debit'] += jurnal['debit']
+            neraca_lajur_dict[kode_akun]['penyesuaian_kredit'] += jurnal['kredit']
         
-        # Hitung neraca saldo setelah penyesuaian
-        for kode_akun, data in neraca_lajur.items():
+        # 3. Hitung neraca saldo setelah penyesuaian
+        for kode_akun, data in neraca_lajur_dict.items():
             # Hitung saldo setelah penyesuaian
-            debit_awal = data['neraca_saldo_debit']
-            kredit_awal = data['neraca_saldo_kredit']
+            neraca_debit = data['neraca_saldo_debit']
+            neraca_kredit = data['neraca_saldo_kredit']
             penyesuaian_debit = data['penyesuaian_debit']
             penyesuaian_kredit = data['penyesuaian_kredit']
             
-            # Untuk akun dengan tipe debit: saldo = debit_awal - kredit_awal + penyesuaian_debit - penyesuaian_kredit
-            # Untuk akun dengan tipe kredit: saldo = kredit_awal - debit_awal + penyesuaian_kredit - penyesuaian_debit
-            
-            # Tentukan tipe akun
+            # Ambil tipe akun
             accounts_res = supabase.table("accounts").select("tipe_akun").eq("kode_akun", kode_akun).execute()
             tipe_akun = accounts_res.data[0]['tipe_akun'] if accounts_res.data else 'debit'
             
+            # Hitung berdasarkan tipe akun
             if tipe_akun == 'debit':
-                saldo_setelah = debit_awal - kredit_awal + penyesuaian_debit - penyesuaian_kredit
+                # Akun debit: normal balance debit
+                saldo_setelah = neraca_debit - neraca_kredit + penyesuaian_debit - penyesuaian_kredit
                 if saldo_setelah >= 0:
                     data['neraca_saldo_setelah_penyesuaian_debit'] = saldo_setelah
                     data['neraca_saldo_setelah_penyesuaian_kredit'] = 0
                 else:
                     data['neraca_saldo_setelah_penyesuaian_debit'] = 0
                     data['neraca_saldo_setelah_penyesuaian_kredit'] = abs(saldo_setelah)
-            else:  # kredit
-                saldo_setelah = kredit_awal - debit_awal + penyesuaian_kredit - penyesuaian_debit
+            else:
+                # Akun kredit: normal balance kredit
+                saldo_setelah = neraca_kredit - neraca_debit + penyesuaian_kredit - penyesuaian_debit
                 if saldo_setelah >= 0:
                     data['neraca_saldo_setelah_penyesuaian_debit'] = 0
                     data['neraca_saldo_setelah_penyesuaian_kredit'] = saldo_setelah
@@ -1433,24 +1437,33 @@ def get_neraca_lajur():
                     data['neraca_saldo_setelah_penyesuaian_debit'] = abs(saldo_setelah)
                     data['neraca_saldo_setelah_penyesuaian_kredit'] = 0
             
-            # Klasifikasikan ke laba rugi atau neraca
-            if data['nama_akun'].lower() in ['pendapatan', 'beban', 'harga pokok penjualan', 'penjualan', 'beban']:
+            # 4. Klasifikasikan ke laba rugi atau neraca
+            # Akun nominal (laba rugi): 4-xxx (pendapatan), 5-xxx (HPP/beban), 6-xxx (beban penyesuaian)
+            if kode_akun.startswith('4-') or kode_akun.startswith('5-') or kode_akun.startswith('6-'):
+                # Akun laba rugi
                 if data['neraca_saldo_setelah_penyesuaian_debit'] > 0:
                     data['laba_rugi_debit'] = data['neraca_saldo_setelah_penyesuaian_debit']
                 else:
                     data['laba_rugi_kredit'] = data['neraca_saldo_setelah_penyesuaian_kredit']
             else:
+                # Akun neraca (aset, kewajiban, modal)
                 if data['neraca_saldo_setelah_penyesuaian_debit'] > 0:
                     data['neraca_debit'] = data['neraca_saldo_setelah_penyesuaian_debit']
                 else:
                     data['neraca_kredit'] = data['neraca_saldo_setelah_penyesuaian_kredit']
         
-        return list(neraca_lajur.values())
+        # Konversi ke list
+        neraca_lajur_data = list(neraca_lajur_dict.values())
+        
+        print(f"🔍 Neraca Lajur final entries: {len(neraca_lajur_data)}")
+        return neraca_lajur_data
         
     except Exception as e:
-        print(f"Error getting neraca lajur: {e}")
+        print(f"❌ Error getting neraca lajur: {e}")
+        import traceback
+        traceback.print_exc()
         return []
-
+    
 # === Helper: Ambil data laporan laba rugi ===
 # === PERBAIKAN 1: FUNGSI HPP YANG BENAR ===
 def get_laba_rugi_data():
@@ -3525,7 +3538,8 @@ def laporan():
             # Neraca Lajur (Generate data kosong untuk struktur visual saja agar tidak error)
             # Implementasi penuh neraca lajur di satu fungsi akan sangat panjang, 
             # kita gunakan data yang sudah dihitung sebelumnya
-            neraca_lajur_data = [] # Bisa diisi logika mapping jika diperlukan, tapi opsional untuk performa
+            neraca_lajur_data = get_neraca_lajur()
+            print(f"🔍 LAPORAN: Neraca Lajur data entries: {len(neraca_lajur_data)}")
             
             
             # Jurnal Penutup (Logic sederhana)
