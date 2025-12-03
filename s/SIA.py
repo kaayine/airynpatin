@@ -1135,24 +1135,57 @@ def update_inventory(item_code, transaction_type, quantity, price, transaction_d
 
 # === Helper: Record inventory transaction ===
 def record_inventory_transaction(item_code, transaction_type, quantity, price, reference_id, description, transaction_date):
-    """Record transaksi inventory untuk history"""
+    """Record transaksi inventory untuk history dengan validasi"""
     try:
-        # Cari item berdasarkan item_code di tabel inventory (bukan inventory_items)
-        item_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
+        print(f"🔧 Recording inventory transaction: {item_code}, type: {transaction_type}, qty: {quantity}")
         
-        if not item_res.data:
-            print(f"❌ Item {item_code} tidak ditemukan di tabel inventory")
+        # Validasi input
+        if not item_code or quantity <= 0:
+            print(f"❌ Invalid input: item_code={item_code}, quantity={quantity}")
             return False
+        
+        # Cari item di tabel inventory
+        try:
+            item_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
             
-        item_data = item_res.data[0]
+            if not item_res.data:
+                print(f"❌ Item {item_code} tidak ditemukan di tabel inventory, creating...")
+                
+                # Buat item baru jika tidak ditemukan
+                new_item = {
+                    'item_code': item_code,
+                    'item_name': 'Ikan Patin 8cm' if '8CM' in item_code.upper() else 'Ikan Patin 10cm',
+                    'item_size': '8cm' if '8CM' in item_code.upper() else '10cm',
+                    'current_stock': 0,
+                    'purchase_price': 500 if '8CM' in item_code.upper() else 800,
+                    'selling_price': 1000 if '8CM' in item_code.upper() else 1500,
+                    'total_sold': 0,
+                    'created_at': datetime.now().isoformat()
+                }
+                
+                create_result = supabase.table("inventory").insert(new_item).execute()
+                if create_result.data:
+                    print(f"✅ Created new inventory item: {item_code}")
+                    item_data = new_item
+                else:
+                    print(f"❌ Failed to create inventory item: {item_code}")
+                    return False
+            else:
+                item_data = item_res.data[0]
+                
+        except Exception as e:
+            print(f"❌ Error finding inventory item: {e}")
+            return False
+        
+        # Hitung total value
         total_value = quantity * price
         
         # Simpan transaksi ke tabel inventory_transactions
         transaction_data = {
-            "item_code": item_code,  # Gunakan item_code langsung
+            "item_code": item_code,
             "transaction_type": transaction_type,
             "quantity": quantity,
-            "price": price,  # Pastikan field name sesuai dengan tabel
+            "price": price,
             "total_amount": total_value,
             "reference_id": reference_id,
             "description": description,
@@ -1163,10 +1196,14 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
         print(f"🔧 Saving inventory transaction: {transaction_data}")
         
         # Simpan transaksi
-        result = supabase.table("inventory_transactions").insert(transaction_data).execute()
-        
-        if not result.data:
-            print(f"❌ Failed to save inventory transaction")
+        try:
+            result = supabase.table("inventory_transactions").insert(transaction_data).execute()
+            
+            if not result.data:
+                print(f"❌ Failed to save inventory transaction")
+                return False
+        except Exception as e:
+            print(f"❌ Error saving inventory transaction: {e}")
             return False
         
         # Update stok berdasarkan jenis transaksi
@@ -1179,7 +1216,7 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
             new_stock = current_stock - quantity
             total_sold += quantity
         elif transaction_type == 'ADJUSTMENT':
-            new_stock = quantity  # Untuk adjustment, set langsung
+            new_stock = quantity
         else:
             print(f"⚠ Unknown transaction type: {transaction_type}")
             return False
@@ -1193,13 +1230,17 @@ def record_inventory_transaction(item_code, transaction_type, quantity, price, r
         
         print(f"🔧 Updating inventory stock: {item_code} -> {new_stock}")
         
-        result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
-        
-        if result.data:
-            print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
-            return True
-        else:
-            print(f"❌ Failed to update inventory: {item_code}")
+        try:
+            result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
+            
+            if result.data:
+                print(f"✅ Inventory transaction recorded: {item_code} {transaction_type} {quantity}")
+                return True
+            else:
+                print(f"❌ Failed to update inventory: {item_code}")
+                return False
+        except Exception as e:
+            print(f"❌ Error updating inventory: {e}")
             return False
         
     except Exception as e:
@@ -1743,7 +1784,11 @@ def process_sale_transaction(tanggal, customer, items, payment_method, shipping_
         total_amount = sum(item['subtotal'] for item in items)
         jenis_transaksi = f"Penjualan - {customer}"
         
-        print(f"🔧 Processing sale: {customer}, total: {total_amount}, payment: {payment_method}, dp: {dp_amount}")
+        print(f"\n{'='*60}")
+        print(f"🔧 Processing sale: {customer}")
+        print(f"🔧 Total: {total_amount}, Payment: {payment_method}")
+        print(f"🔧 Shipping: {shipping_cost}, DP: {dp_amount}")
+        print(f"{'='*60}")
 
         # Hitung tanggal besok untuk auto-pelunasan
         tanggal_obj = datetime.strptime(tanggal, '%Y-%m-%d')
@@ -1909,10 +1954,12 @@ def process_sale_transaction(tanggal, customer, items, payment_method, shipping_
             for item in items:
                 item_code = "PATIN-8CM" if item['jenis_ikan'] == '8cm' else "PATIN-10CM"
                 
+                print(f"🔧 Updating inventory for {item_code}: {item['quantity']} units")
+                
                 # Gunakan fungsi record_inventory_transaction yang sudah diperbaiki
                 inventory_success = record_inventory_transaction(
                     item_code, 
-                    'SALE',  # Pastikan menggunakan 'SALE' bukan 'SALES'
+                    'SALE',
                     item['quantity'], 
                     item['selling_price'], 
                     f"SO-{datetime.now().strftime('%Y%m%d%H%M%S')}",
@@ -1955,13 +2002,13 @@ def process_sale_transaction(tanggal, customer, items, payment_method, shipping_
     
 # === Helper: Setup default inventory ===
 def setup_default_inventory_items():
-    """Setup inventory default untuk ikan patin"""
+    """Setup inventory default untuk ikan patin dengan struktur yang benar"""
     default_items = [
         {
             'item_code': 'PATIN-8CM',
             'item_name': 'Ikan Patin',
             'item_size': '8cm',
-            'current_stock': 0,
+            'current_stock': 100,  # Stok awal
             'purchase_price': 500,
             'selling_price': 1000,
             'total_sold': 0,
@@ -1971,7 +2018,7 @@ def setup_default_inventory_items():
             'item_code': 'PATIN-10CM', 
             'item_name': 'Ikan Patin',
             'item_size': '10cm',
-            'current_stock': 0,
+            'current_stock': 100,  # Stok awal
             'purchase_price': 800,
             'selling_price': 1500,
             'total_sold': 0,
@@ -1980,21 +2027,35 @@ def setup_default_inventory_items():
     ]
     
     try:
-        # Cek apakah inventory sudah ada
-        existing_res = supabase.table("inventory").select("item_code").execute()
-        existing_items = [item['item_code'] for item in existing_res.data] if existing_res.data else []
+        print("🔧 Setting up default inventory items...")
+        
+        # Cek apakah tabel inventory ada
+        try:
+            existing_res = supabase.table("inventory").select("item_code").execute()
+            existing_items = [item['item_code'] for item in existing_res.data] if existing_res.data else []
+        except Exception as e:
+            print(f"⚠ Tabel inventory mungkin belum ada: {e}")
+            existing_items = []
         
         # Insert item yang belum ada
         for item in default_items:
             if item['item_code'] not in existing_items:
-                result = supabase.table("inventory").insert(item).execute()
-                if result.data:
-                    print(f"✅ Inventory item {item['item_code']} berhasil ditambahkan")
-                else:
-                    print(f"❌ Gagal menambahkan inventory item {item['item_code']}")
+                print(f"🔧 Adding inventory item: {item['item_code']}")
+                try:
+                    result = supabase.table("inventory").insert(item).execute()
+                    if result.data:
+                        print(f"✅ Inventory item {item['item_code']} berhasil ditambahkan")
+                    else:
+                        print(f"❌ Gagal menambahkan inventory item {item['item_code']}")
+                except Exception as e:
+                    print(f"❌ Error inserting {item['item_code']}: {e}")
+            else:
+                print(f"✅ Inventory item {item['item_code']} sudah ada")
                 
     except Exception as e:
         print(f"Error setting up default inventory: {e}")
+        import traceback
+        traceback.print_exc()
 
 # === Base template (sidebar + main) ===
 base_template = """
@@ -7244,6 +7305,66 @@ def adjust_stok():
     except Exception as e:
         print(f"Error adjusting stock: {e}")
         return "<script>alert('Error adjust stok!'); window.history.back();</script>"
+
+@app.route("/reset_inventory")
+def reset_inventory():
+    """Route untuk reset dan setup ulang inventory (debug purpose)"""
+    if "user" not in session:
+        return redirect("/signin")
+    
+    try:
+        # Hapus semua data inventory yang ada
+        supabase.table("inventory").delete().neq("item_code", "none").execute()
+        print("✅ Inventory data cleared")
+        
+        # Setup ulang inventory
+        setup_default_inventory_items()
+        
+        return """
+        <script>
+            alert('✅ Inventory berhasil direset dan di-setup ulang!');
+            window.location.href = '/barang';
+        </script>
+        """
+    except Exception as e:
+        print(f"❌ Error resetting inventory: {e}")
+        return f"""
+        <script>
+            alert('❌ Error resetting inventory: {str(e)}');
+            window.history.back();
+        </script>
+        """
+
+@app.route("/check_inventory")
+def check_inventory():
+    """Route untuk mengecek status inventory"""
+    if "user" not in session:
+        return redirect("/signin")
+    
+    try:
+        # Cek data inventory
+        inventory_res = supabase.table("inventory").select("*").execute()
+        
+        html = f"""
+        <h2>📊 Inventory Status</h2>
+        <p>Total items: {len(inventory_res.data) if inventory_res.data else 0}</p>
+        """
+        
+        if inventory_res.data:
+            html += "<table border='1'><tr><th>Item Code</th><th>Item Name</th><th>Stock</th></tr>"
+            for item in inventory_res.data:
+                html += f"<tr><td>{item['item_code']}</td><td>{item['item_name']}</td><td>{item['current_stock']}</td></tr>"
+            html += "</table>"
+        
+        html += """
+        <br>
+        <a href="/reset_inventory" onclick="return confirm('Reset semua inventory?')">Reset Inventory</a> | 
+        <a href="/barang">Kembali</a>
+        """
+        
+        return html
+    except Exception as e:
+        return f"Error: {str(e)}"
     
 # === ROUTES LAINNYA ===
 @app.route("/riwayat")
