@@ -3550,14 +3550,11 @@ def laporan():
             
             
             # Jurnal Penutup (Logic sederhana)
-            jurnal_penutup_data = get_jurnal_penutup_data()
+            jurnal_penutup_data = [] 
             # (Logic generate jurnal penutup bisa ditambahkan jika fitur ini krusial ditampilkan realtime)
 
             # Neraca Saldo Penutupan
-            neraca_saldo_penutupan = get_neraca_saldo_setelah_penutupan()
-
-            print(f"🔍 Jurnal Penutup: {len(jurnal_penutup_data)} entries")
-            print(f"🔍 Neraca Penutupan: {len(neraca_saldo_penutupan)} entries")
+            neraca_saldo_penutupan = [] # (Logic neraca penutupan)
 
         except Exception as e:
             print(f"Error fetching data: {e}")
