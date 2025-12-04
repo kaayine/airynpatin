@@ -2200,7 +2200,7 @@ base_template = """
     <div class="logo">
       <img src="{{ url_for('static', filename='images/logo airyn.png') }}" alt="logo airyn">
       <h3>Airyn</h3>
-      <h4 class="desc">Simplify Your Sale Game</h4>
+      <h4 class="desc">Simplify Your Transaction</h4>
     </div>
     <ul>
       <li><a href="/beranda"><i class="ri-home-4-line"></i>Beranda</a></li>
@@ -2451,7 +2451,7 @@ beranda_content = """
       Airyn membantu Anda mengelola bisnis tambak dengan lebih efisien dan profitable.
     </p>
     <p>
-      <strong>Simplify Your Sale Game</strong> - karena kesuksesan bisnis Anda adalah prioritas kami.
+      <strong>Simplify Your Sale Transaction</strong> - karena kesuksesan bisnis Anda adalah prioritas kami.
     </p>
   </div>
 </div>
