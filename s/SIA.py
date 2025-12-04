@@ -492,51 +492,30 @@ def format_laba_rugi_content(laba_rugi_data):
     return content
 
 # === Helper: Setup database tables ===
+# 1. Ini fungsi SEBELUMNYA (harus lengkap isinya agar tidak error di bawahnya)
 def setup_database_tables():
     """Setup initial database tables jika belum ada"""
-    try:
-        # Cek apakah tabel jurnal_umum sudah ada
-        test_query = supabase.table("jurnal_umum").select("count", count="exact").limit(1).execute()
-        print("✅ Tabel jurnal_umum sudah ada")
-    except Exception as e:
-        print("⚠ Tabel jurnal_umum belum ada, perlu dibuat manual di Supabase")
-        
-    try:
-        # Cek apakah tabel accounts sudah ada
-        test_query = supabase.table("accounts").select("count", count="exact").limit(1).execute()
-        print("✅ Tabel accounts sudah ada")
-    except Exception as e:
-        print("⚠ Tabel accounts belum ada, perlu dibuat manual di Supabase")
-        
-    try:
-        # Cek apakah tabel inventory_transactions sudah ada
-        test_query = supabase.table("inventory_transactions").select("count", count="exact").limit(1).execute()
-        print("✅ Tabel inventory_transactions sudah ada")
-    except Exception as e:
-        print("⚠ Tabel inventory_transactions belum ada, perlu dibuat manual di Supabase")
-        
-    try:
-        # Cek apakah tabel sales sudah ada
-        test_query = supabase.table("sales").select("count", count="exact").limit(1).execute()
-        print("✅ Tabel sales sudah ada")
-    except Exception as e:
-        print("⚠ Tabel sales belum ada, perlu dibuat manual di Supabase")
-        
-    try:
-        # Cek apakah tabel jurnal_penyesuaian sudah ada
-        test_query = supabase.table("jurnal_penyesuaian").select("count", count="exact").limit(1).execute()
-        print("✅ Tabel jurnal_penyesuaian sudah ada")
-    except Exception as e:
-        print("⚠ Tabel jurnal_penyesuaian belum ada, perlu dibuat manual di Supabase")
-        
-    try:
-        # Cek apakah tabel buku_pembantu_piutang sudah ada
-        test_query = supabase.table("buku_pembantu_piutang").select("count", count="exact").limit(1).execute()
-        print("✅ Tabel buku_pembantu_piutang sudah ada")
-    except Exception as e:
-        print("⚠ Tabel buku_pembantu_piutang belum ada, perlu dibuat manual di Supabase")
-
+    print("🔧 Checking database tables...")
     
+    tables_to_check = [
+        "jurnal_umum", 
+        "accounts", 
+        "inventory_transactions", 
+        "sales", 
+        "jurnal_penyesuaian",
+        "buku_pembantu_piutang",
+        "jurnal_penutup"
+    ]
+    
+    for table in tables_to_check:
+        try:
+            # Cek apakah tabel ada dengan select 1 baris
+            supabase.table(table).select("count", count="exact").limit(1).execute()
+            print(f"✅ Tabel {table} sudah ada")
+        except Exception as e:
+            print(f"⚠ Tabel {table} belum ada atau error akses. Pastikan Anda membuatnya di Supabase SQL Editor.")
+
+# 2. Ini fungsi YANG ANDA KIRIM (sekarang aman karena fungsi di atas sudah lengkap)
 def save_journal_entries(tanggal, jenis_transaksi, entries, table_name="jurnal_umum"):
     """Simpan multiple entries untuk satu transaksi jurnal - VERSI DIPERBAIKI UNTUK SUPABASE"""
     try:
@@ -607,7 +586,6 @@ def save_journal_entries(tanggal, jenis_transaksi, entries, table_name="jurnal_u
         import traceback
         traceback.print_exc()
         return False
-
 # === Helper: Record ke Buku Pembantu Piutang ===
 def record_buku_pembantu_piutang(customer, tanggal, keterangan, debit, kredit):
     """Record transaksi ke buku pembantu piutang untuk customer tertentu"""
@@ -983,111 +961,84 @@ def get_jurnal_penutup_data():
 def get_neraca_saldo_setelah_penutupan():
     """Ambil data neraca saldo setelah penutupan"""
     try:
-        print("🔍 DEBUG: Memulai get_neraca_saldo_setelah_penutupan()")
-        
         # 1. Ambil neraca saldo setelah penyesuaian
         neraca_setelah_penyesuaian = get_neraca_saldo_setelah_penyesuaian()
-        print(f"🔍 DEBUG: NSSP entries: {len(neraca_setelah_penyesuaian)}")
         
-        # 2. Ambil data accounts untuk info tipe akun
-        accounts_res = supabase.table("accounts").select("*").execute()
-        accounts = accounts_res.data if accounts_res.data else []
-        
-        # Buat dictionary untuk mapping account
-        account_dict = {acc['kode_akun']: acc for acc in accounts}
-        
-        # 3. Ambil jurnal penutup dari database
-        jurnal_penutup_res = supabase.table("jurnal_penutup").select("*").execute()
-        jurnal_penutup = jurnal_penutup_res.data if jurnal_penutup_res.data else []
-        print(f"🔍 DEBUG: Jurnal penutup entries: {len(jurnal_penutup)}")
-        
-        # 4. Kelompokkan jurnal penutup per akun
+        # 2. Ambil jurnal penutup dari database
+        try:
+            jurnal_penutup_res = supabase.table("jurnal_penutup").select("*").execute()
+            jurnal_penutup = jurnal_penutup_res.data if jurnal_penutup_res.data else []
+        except:
+            # Jika tabel belum ada, anggap kosong agar tidak error
+            jurnal_penutup = []
+            
+        # Jika belum ada jurnal penutup di DB, mungkin user ingin melihat preview
+        # Kita bisa ambil dari fungsi generator in-memory jika DB kosong
+        if not jurnal_penutup:
+            print("ℹ️ Mengambil preview jurnal penutup (in-memory) karena DB kosong")
+            jurnal_penutup = get_jurnal_penutup_data()
+
+        # 3. Kelompokkan jurnal penutup per akun
         penyesuaian_penutup = {}
         for entry in jurnal_penutup:
             kode = entry['kode_akun']
             if kode not in penyesuaian_penutup:
                 penyesuaian_penutup[kode] = {'debit': 0, 'kredit': 0}
-            penyesuaian_penutup[kode]['debit'] += float(entry['debit'] or 0)
-            penyesuaian_penutup[kode]['kredit'] += float(entry['kredit'] or 0)
+            penyesuaian_penutup[kode]['debit'] += float(entry.get('debit', 0))
+            penyesuaian_penutup[kode]['kredit'] += float(entry.get('kredit', 0))
         
-        print(f"🔍 DEBUG: Jurnal penutup affect {len(penyesuaian_penutup)} akun")
-        
-        # 5. Siapkan hasil akhir
+        # 4. Hitung Saldo Akhir (Akun Nominal harus jadi 0)
         akun_real = []
         
-        # 6. Proses setiap akun di neraca setelah penyesuaian
         for item in neraca_setelah_penyesuaian:
             kode = item['kode_akun']
             nama = item['nama_akun']
+            tipe = item.get('tipe_akun', 'debit')
             
-            # Hanya ambil akun REAL (bukan nominal: 4, 5, 6, 3-1100)
-            # Akun REAL: Aset (1-xxx), Liabilitas (2-xxx), Modal (3-xxx kecuali 3-1100)
-            if not (kode.startswith('4-') or kode.startswith('5-') or kode.startswith('6-') or kode == '3-1100'):
+            # Saldo awal (dari NSSP)
+            debit_awal = float(item.get('debit', 0))
+            kredit_awal = float(item.get('kredit', 0))
+            
+            # Apply Penutup
+            adj_debit = 0
+            adj_kredit = 0
+            if kode in penyesuaian_penutup:
+                adj = penyesuaian_penutup[kode]
+                adj_debit = adj['debit']
+                adj_kredit = adj['kredit']
+            
+            # Hitung saldo net baru
+            # Logika: Saldo Baru = (Debit Awal + Debit Penutup) - (Kredit Awal + Kredit Penutup)
+            # Karena Jurnal Penutup membalik saldo akun nominal, hasilnya harus 0 untuk akun nominal.
+            
+            total_debit = debit_awal + adj_debit
+            total_kredit = kredit_awal + adj_kredit
+            
+            saldo_akhir = 0
+            posisi_saldo = 'debit'
+            
+            if tipe == 'debit':
+                saldo_akhir = total_debit - total_kredit
+                posisi_saldo = 'debit' if saldo_akhir >= 0 else 'kredit'
+            else:
+                saldo_akhir = total_kredit - total_debit
+                posisi_saldo = 'kredit' if saldo_akhir >= 0 else 'debit'
                 
-                # Mulai dari saldo setelah penyesuaian
-                debit_awal = float(item.get('debit', 0))
-                kredit_awal = float(item.get('kredit', 0))
+            saldo_akhir = abs(saldo_akhir)
+            
+            # Hanya masukkan ke list jika saldo tidak 0 (atau sangat kecil)
+            if saldo_akhir > 1: # Toleransi floating point
+                akun_real.append({
+                    'kode_akun': kode,
+                    'nama_akun': nama,
+                    'debit': saldo_akhir if posisi_saldo == 'debit' else 0,
+                    'kredit': saldo_akhir if posisi_saldo == 'kredit' else 0
+                })
                 
-                print(f"🔍 DEBUG: Akun {kode} - Saldo awal: D={debit_awal}, K={kredit_awal}")
-                
-                # Apply penyesuaian dari jurnal penutup jika ada
-                if kode in penyesuaian_penutup:
-                    penyesuaian = penyesuaian_penutup[kode]
-                    debit_awal += penyesuaian['debit']
-                    kredit_awal += penyesuaian['kredit']
-                    print(f"🔍 DEBUG: Akun {kode} - Penyesuaian: +D={penyesuaian['debit']}, +K={penyesuaian['kredit']}")
-                
-                # Tentukan tipe akun
-                tipe_akun = 'debit'  # default
-                if kode in account_dict:
-                    tipe_akun = account_dict[kode]['tipe_akun']
-                
-                # Format sesuai tipe akun
-                if tipe_akun == 'debit':
-                    saldo_net = debit_awal - kredit_awal
-                    if saldo_net >= 0:
-                        akun_real.append({
-                            'kode_akun': kode,
-                            'nama_akun': nama,
-                            'debit': saldo_net,
-                            'kredit': 0
-                        })
-                    else:
-                        akun_real.append({
-                            'kode_akun': kode,
-                            'nama_akun': nama,
-                            'debit': 0,
-                            'kredit': abs(saldo_net)
-                        })
-                else:  # kredit
-                    saldo_net = kredit_awal - debit_awal
-                    if saldo_net >= 0:
-                        akun_real.append({
-                            'kode_akun': kode,
-                            'nama_akun': nama,
-                            'debit': 0,
-                            'kredit': saldo_net
-                        })
-                    else:
-                        akun_real.append({
-                            'kode_akun': kode,
-                            'nama_akun': nama,
-                            'debit': abs(saldo_net),
-                            'kredit': 0
-                        })
-        
-        print(f"✅ Neraca saldo setelah penutupan: {len(akun_real)} akun")
-        
-        # Debug: tampilkan beberapa akun
-        for i, akun in enumerate(akun_real[:5]):
-            print(f"  {i+1}. {akun['kode_akun']} - {akun['nama_akun']}: D={akun['debit']}, K={akun['kredit']}")
-        
         return akun_real
         
     except Exception as e:
         print(f"❌ Error getting neraca saldo setelah penutupan: {e}")
-        import traceback
-        traceback.print_exc()
         return []
     
 # === Helper: Update inventory ===
@@ -1697,7 +1648,7 @@ def get_neraca_data():
     
 # === Helper: Update inventory stock ===
 def update_inventory_stock(item_code, transaction_type, quantity):
-    """Update stok inventory berdasarkan transaksi - HANYA UNIT"""
+    """Update stok inventory dengan validasi tipe data yang ketat"""
     try:
         # Ambil data inventory saat ini
         inventory_res = supabase.table("inventory").select("*").eq("item_code", item_code).execute()
@@ -1707,25 +1658,33 @@ def update_inventory_stock(item_code, transaction_type, quantity):
             return False
         
         current_data = inventory_res.data[0]
-        current_stock = current_data['current_stock']
-        total_sold = current_data['total_sold']
+        # Pastikan dikonversi ke integer
+        current_stock = int(current_data.get('current_stock', 0))
+        total_sold = int(current_data.get('total_sold', 0))
+        quantity = int(quantity) # Pastikan quantity adalah integer
         
-        # Update berdasarkan jenis transaksi - HANYA UNIT
+        new_stock = current_stock
+        
+        # Update berdasarkan jenis transaksi
         if transaction_type == 'PURCHASE':
             new_stock = current_stock + quantity
             print(f"🔧 Stock IN: {current_stock} + {quantity} = {new_stock}")
+            
         elif transaction_type == 'SALE':
             if current_stock < quantity:
                 print(f"❌ Insufficient stock: {current_stock} < {quantity}")
                 return False
+            
+            # LOGIKA UTAMA: Pengurangan
             new_stock = current_stock - quantity
             total_sold += quantity
             print(f"🔧 Stock OUT: {current_stock} - {quantity} = {new_stock}")
+            
         elif transaction_type == 'ADJUSTMENT':
-            new_stock = quantity  # Set manual
+            new_stock = quantity  # Hati-hati, ini me-reset stok ke nilai input
             print(f"🔧 Stock ADJUST: set to {quantity}")
         
-        # Update inventory
+        # Update inventory ke database
         update_data = {
             "current_stock": new_stock,
             "total_sold": total_sold,
@@ -1735,7 +1694,7 @@ def update_inventory_stock(item_code, transaction_type, quantity):
         result = supabase.table("inventory").update(update_data).eq("item_code", item_code).execute()
         
         if result.data:
-            print(f"✅ Inventory stock updated: {item_code} {transaction_type} {quantity} units (from {current_stock} to {new_stock})")
+            print(f"✅ Inventory stock updated: {item_code} -> {new_stock}")
             return True
         else:
             print(f"❌ Failed to update inventory stock: {item_code}")
@@ -1743,6 +1702,8 @@ def update_inventory_stock(item_code, transaction_type, quantity):
             
     except Exception as e:
         print(f"❌ Error updating inventory stock: {e}")
+        import traceback
+        traceback.print_exc() # Print error detail ke console
         return False
 
 # === Helper: Record inventory transaction ===
@@ -7962,7 +7923,6 @@ def api_save_jurnal_penutup():
 
 # === MAIN ===
 if __name__ == "__main__":
-
     # Setup database dan akun default saat aplikasi pertama kali dijalankan
     setup_database_tables()
     setup_default_accounts()
