@@ -5043,16 +5043,55 @@ def laporan():
                 <div class="card">
                     <div class="card-header">
                         <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
-                        <div>
-                            <button class="btn-primary btn-warning" onclick="generateJurnalPenutup()">
-                                <i class="ri-refresh-line"></i> Generate Jurnal Penutup
-                            </button>
-                            <button class="btn-primary btn-danger" onclick="prosesPenutupanPeriode()">
-                                <i class="ri-shut-down-line"></i> Proses Penutupan Periode
-                            </button>
-                        </div>
+                        <p style="color: #64748b; margin: 0;">Generated otomatis berdasarkan Laba Rugi periode berjalan</p>
                     </div>
                     <div class="jurnal-container">
+        """
+        
+        # Tampilkan data jurnal penutup
+        if jurnal_penutup_data:
+            laporan_content += """
+                        <table class="jurnal-table">
+                            <thead>
+                                <tr>
+                                    <th width="100">Kode Akun</th>
+                                    <th>Nama Akun</th>
+                                    <th width="200">Debit</th>
+                                    <th width="200">Kredit</th>
+                                    <th>Keterangan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+            """
+            
+            for entry in jurnal_penutup_data:
+                laporan_content += f"""
+                            <tr>
+                                <td><strong>{entry['kode_akun']}</strong></td>
+                                <td>{entry['nama_akun']}</td>
+                                <td class="debit-amount">{f"Rp {entry['debit']:,.0f}" if entry['debit'] > 0 else ""}</td>
+                                <td class="kredit-amount">{f"Rp {entry['kredit']:,.0f}" if entry['kredit'] > 0 else ""}</td>
+                                <td>{entry['keterangan']}</td>
+                            </tr>
+                """
+            
+            laporan_content += """
+                        </tbody>
+                    </table>
+            """
+        else:
+            laporan_content += """
+                    <div class="empty-state">
+                        <i class="ri-file-list-3-line"></i>
+                        <h3>Belum Ada Data Jurnal Penutup</h3>
+                        <p>Data akan muncul setelah ada transaksi Pendapatan atau Beban.</p>
+                    </div>
+            """
+        
+        laporan_content += """
+                    </div>
+                </div>
+            </div>
         """
         
         # Tampilkan data jurnal penutup
