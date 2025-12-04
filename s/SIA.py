@@ -7791,7 +7791,7 @@ def hubungi():
                     </div>
                     <div class="contact-details">
                         <h3>Alamat</h3>
-                        <p>Jl. Tambak Ikan No. 123, Jakarta</p>
+                        <p>Jl.Ngablak Indah, Muktiharjo Lor, Kec.Geruk, Kota Semarang, Jawa Tengah, 50111</p>
                     </div>
                 </div>
                 
