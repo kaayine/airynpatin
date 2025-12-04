@@ -586,6 +586,7 @@ def save_journal_entries(tanggal, jenis_transaksi, entries, table_name="jurnal_u
         import traceback
         traceback.print_exc()
         return False
+
 # === Helper: Record ke Buku Pembantu Piutang ===
 def record_buku_pembantu_piutang(customer, tanggal, keterangan, debit, kredit):
     """Record transaksi ke buku pembantu piutang untuk customer tertentu"""
@@ -5044,6 +5045,14 @@ def laporan():
                     <div class="card-header">
                         <h2 class="card-title">Jurnal Penutup - Toko Ikan Patin</h2>
                         <div>
+                            <button class="btn-primary btn-warning" onclick="generateJurnalPenutup()">
+                                <i class="ri-refresh-line"></i> Generate Jurnal Penutup
+                            </button>
+                            <button class="btn-primary btn-danger" onclick="prosesPenutupanPeriode()">
+                                <i class="ri-shut-down-line"></i> Proses Penutupan Periode
+                            </button>
+                        </div>
+                    </div>
                     <div class="jurnal-container">
         """
         
